@@ -1450,100 +1450,144 @@ function StatusBadge({ estado }) {
 }
 
 function Dashboard() {
+  const [stats, setStats] = useState({ prospectos:0, propiedades:0, disponibles:0, vendidos:0, negociacion:0, nuevos:0 });
+  const [prospectosList, setProspectosList] = useState([]);
+  const [propiedadesList, setPropiedadesList] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const today = new Date().toLocaleDateString("es-CO", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const [pros, props] = await Promise.all([
+        supa.from("prospectos").select("*"),
+        supa.from("propiedades").select("*"),
+      ]);
+      const prosArr = Array.isArray(pros) ? pros : [];
+      const propsArr = Array.isArray(props) ? props : [];
+      setProspectosList(prosArr);
+      setPropiedadesList(propsArr);
+      setStats({
+        prospectos: prosArr.length,
+        propiedades: propsArr.length,
+        disponibles: propsArr.filter(p=>p.estado==="Disponible").length,
+        vendidos: propsArr.filter(p=>p.estado==="Vendido").length,
+        negociacion: prosArr.filter(p=>p.estado==="Negociación").length,
+        nuevos: prosArr.filter(p=>p.estado==="Nuevo").length,
+      });
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const pipelineReal = [
+    { label:"Nuevos", count: prospectosList.filter(p=>p.estado==="Nuevo").length },
+    { label:"Contactados", count: prospectosList.filter(p=>p.estado==="Contactado").length },
+    { label:"Interesados", count: prospectosList.filter(p=>p.estado==="Interesado").length },
+    { label:"Visita agendada", count: prospectosList.filter(p=>p.estado==="Visita agendada").length },
+    { label:"Negociación", count: prospectosList.filter(p=>p.estado==="Negociación").length },
+    { label:"Cerrado", count: prospectosList.filter(p=>p.estado==="Cerrado").length },
+  ];
+  const maxPipe = Math.max(...pipelineReal.map(p=>p.count), 1);
+
+  const recentProspectos = [...prospectosList].slice(0, 5);
+
   return (
     <div>
       <div className="page-header">
         <div>
           <div className="page-heading">Panel <span>General</span></div>
-          <div className="page-sub">Lunes, 25 de mayo 2026 · Semana 21</div>
+          <div className="page-sub" style={{textTransform:"capitalize"}}>{today}</div>
         </div>
-        <button className="btn btn-gold">+ Nueva actividad</button>
+        <button className="btn btn-gold" onClick={()=>window.location.reload()}>↻ Actualizar</button>
       </div>
 
-      <div className="kpi-row">
-        {[
-          { label:"Prospectos activos", val:"28", trend:"+4", up:true, sub:"vs semana anterior", icon:"👥", color:"var(--gold)" },
-          { label:"Visitas este mes", val:"47", trend:"+12", up:true, sub:"vs mes anterior", icon:"🏠", color:"var(--blue)" },
-          { label:"En negociación", val:"6", trend:"-1", up:false, sub:"vs semana anterior", icon:"🤝", color:"var(--amber)" },
-          { label:"Cierres del mes", val:"3", trend:"+1", up:true, sub:"meta: 5", icon:"🏆", color:"var(--green)" },
-        ].map((k,i) => (
-          <div className="kpi-card" key={i} style={{"--accent-color":k.color}}>
-            <div className="kpi-icon">{k.icon}</div>
-            <div className="kpi-label">{k.label}</div>
-            <div className="kpi-value">{k.val}</div>
-            <div className="kpi-sub">
-              <span className={`kpi-trend ${k.up?"up":"down"}`}>{k.up?"↑":"↓"} {k.trend}</span>
-              {k.sub}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="dash-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <div className="panel-title">Visitas de hoy</div>
-            <span className="panel-action">Ver agenda →</span>
-          </div>
-          <div className="panel-body">
-            {visitasHoy.map((v,i) => (
-              <div className="visit-item" key={i}>
-                <div className="visit-time">
-                  {v.hora}
-                  <span className="visit-time-ampm">{v.ampm}</span>
-                </div>
-                <div className="visit-info">
-                  <div className="visit-name">{v.cliente}</div>
-                  <div className="visit-apt">{v.apt}</div>
-                </div>
-                <span className={`visit-status status-${v.estado}`}>
-                  {v.estado==="confirmed"?"Confirmada":v.estado==="pending"?"Pendiente":"Realizada"}
-                </span>
+      {loading ? (
+        <div style={{textAlign:"center",padding:40,color:"var(--text3)"}}>Cargando datos reales...</div>
+      ) : (
+        <>
+          <div className="kpi-row">
+            {[
+              { label:"Total prospectos", val:stats.prospectos, sub:"en base de datos", icon:"👥", color:"var(--gold)" },
+              { label:"Propiedades activas", val:stats.disponibles, sub:`de ${stats.propiedades} en inventario`, icon:"🏠", color:"var(--blue)" },
+              { label:"En negociación", val:stats.negociacion, sub:"prospectos activos", icon:"🤝", color:"var(--amber)" },
+              { label:"Propiedades vendidas", val:stats.vendidos, sub:"cerradas exitosamente", icon:"🏆", color:"var(--green)" },
+            ].map((k,i) => (
+              <div className="kpi-card" key={i} style={{"--accent-color":k.color}}>
+                <div className="kpi-icon">{k.icon}</div>
+                <div className="kpi-label">{k.label}</div>
+                <div className="kpi-value">{k.val}</div>
+                <div className="kpi-sub">{k.sub}</div>
               </div>
             ))}
           </div>
-        </div>
 
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div className="panel">
-            <div className="panel-header">
-              <div className="panel-title">Pipeline</div>
-              <span className="panel-action">28 prospectos</span>
-            </div>
-            <div className="pipeline-mini">
-              {pipelineData.map((p,i) => (
-                <div className="pipe-stage" key={i}>
-                  <div className="pipe-label">{p.label}</div>
-                  <div className="pipe-bar-bg">
-                    <div className="pipe-bar-fill" style={{width:`${p.pct}%`}} />
+          <div className="dash-grid">
+            <div className="panel">
+              <div className="panel-header">
+                <div className="panel-title">Últimos prospectos</div>
+                <span className="panel-action">{stats.prospectos} en total</span>
+              </div>
+              <div className="panel-body">
+                {recentProspectos.length === 0 ? (
+                  <div style={{color:"var(--text3)",fontSize:12,textAlign:"center",padding:"20px 0"}}>Sin prospectos aún</div>
+                ) : recentProspectos.map((p,i) => (
+                  <div className="visit-item" key={i}>
+                    <div style={{width:32,height:32,borderRadius:"50%",background:"var(--gold-dim)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--gold)",fontSize:12,fontWeight:600,flexShrink:0}}>
+                      {p.nombre.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}
+                    </div>
+                    <div className="visit-info">
+                      <div className="visit-name">{p.nombre}</div>
+                      <div className="visit-apt">{p.tipo} · {p.presupuesto || "Sin presupuesto"}</div>
+                    </div>
+                    <StatusBadge estado={p.estado} />
                   </div>
-                  <div className="pipe-count">{p.count}</div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
 
-      <div className="panel">
-        <div className="panel-header">
-          <div className="panel-title">Actividad reciente</div>
-          <span className="panel-action">Ver todo →</span>
-        </div>
-        <div className="panel-body">
-          <div className="activity-list">
-            {actividades.map((a,i) => (
-              <div className="activity-item" key={i}>
-                <div className="activity-dot" style={{background:a.color}} />
-                <div className="activity-body">
-                  <div className="activity-text">{a.text}</div>
-                  <div className="activity-time">{a.time}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
+              <div className="panel">
+                <div className="panel-header">
+                  <div className="panel-title">Pipeline real</div>
+                  <span className="panel-action">{stats.prospectos} prospectos</span>
+                </div>
+                <div className="pipeline-mini">
+                  {pipelineReal.map((p,i) => (
+                    <div className="pipe-stage" key={i}>
+                      <div className="pipe-label">{p.label}</div>
+                      <div className="pipe-bar-bg">
+                        <div className="pipe-bar-fill" style={{width:`${(p.count/maxPipe)*100}%`}} />
+                      </div>
+                      <div className="pipe-count">{p.count}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+
+              <div className="panel">
+                <div className="panel-header">
+                  <div className="panel-title">Inventario</div>
+                  <span className="panel-action">{stats.propiedades} propiedades</span>
+                </div>
+                <div className="panel-body">
+                  {[
+                    { label:"Disponibles", val:stats.disponibles, color:"var(--green)" },
+                    { label:"Vendidas", val:stats.vendidos, color:"var(--red)" },
+                    { label:"Total inventario", val:stats.propiedades, color:"var(--gold)" },
+                  ].map((item,i) => (
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid var(--border)",fontSize:12}}>
+                      <span style={{color:"var(--text3)"}}>{item.label}</span>
+                      <span style={{color:item.color,fontWeight:600,fontFamily:"Cormorant Garamond,serif",fontSize:16}}>{item.val}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
