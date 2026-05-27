@@ -1731,19 +1731,101 @@ function Prospectos() {
 
 function Propiedades() {
   const [tab, setTab] = useState("Todas");
-  const tabs = ["Todas","Disponibles","Reservadas","Vendidas"];
+  const [propiedades, setPropiedades] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ nombre:"", ubicacion:"", precio:"", estado:"Disponible", m2:"", habitaciones:"", banos:"", notas:"" });
+
+  const tabs = ["Todas","Disponibles","Vendidas"];
+
+  const emojiFor = (notas) => {
+    const n = (notas||"").toLowerCase();
+    if (n.includes("lote")) return "🌿";
+    if (n.includes("casa")) return "🏡";
+    if (n.includes("apto") || n.includes("apartamento")) return "🏢";
+    return "🏠";
+  };
+  const bgFor = (i) => {
+    const bgs = [
+      "linear-gradient(135deg,#1a2a3a,#0d1a2a)",
+      "linear-gradient(135deg,#1a2a1a,#0d1a10)",
+      "linear-gradient(135deg,#2a1a2a,#1a0d1a)",
+      "linear-gradient(135deg,#2a2210,#1a1608)",
+      "linear-gradient(135deg,#10222a,#081418)",
+      "linear-gradient(135deg,#1a1a2a,#0d0d1a)",
+    ];
+    return bgs[i % bgs.length];
+  };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const data = await supa.from("propiedades").select("*");
+    setPropiedades(Array.isArray(data) ? data : []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    if (!form.nombre.trim()) return;
+    setSaving(true);
+    await supa.from("propiedades").insert({
+      ...form,
+      m2: form.m2 ? parseInt(form.m2) : null,
+      habitaciones: form.habitaciones ? parseInt(form.habitaciones) : null,
+      banos: form.banos ? parseInt(form.banos) : null,
+    });
+    setForm({ nombre:"", ubicacion:"", precio:"", estado:"Disponible", m2:"", habitaciones:"", banos:"", notas:"" });
+    setShowForm(false);
+    setSaving(false);
+    load();
+  };
+
   const filtered = tab==="Todas" ? propiedades
-    : propiedades.filter(p => p.estado === tab.slice(0,-1));
+    : tab==="Disponibles" ? propiedades.filter(p=>p.estado==="Disponible")
+    : propiedades.filter(p=>p.estado==="Vendido");
 
   return (
     <div>
       <div className="page-header">
         <div>
           <div className="page-heading">Inventario de <span>Propiedades</span></div>
-          <div className="page-sub">{propiedades.length} unidades registradas · 3 disponibles</div>
+          <div className="page-sub">{propiedades.length} unidades · {propiedades.filter(p=>p.estado==="Disponible").length} disponibles · conectado a Supabase ●</div>
         </div>
-        <button className="btn btn-gold">+ Agregar propiedad</button>
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn btn-ghost" onClick={load}>↻ Actualizar</button>
+          <button className="btn btn-gold" onClick={()=>setShowForm(!showForm)}>+ Agregar propiedad</button>
+        </div>
       </div>
+
+      {showForm && (
+        <div className="panel" style={{marginBottom:20}}>
+          <div className="panel-header">
+            <div className="panel-title">Nueva Propiedad</div>
+            <span className="panel-action" onClick={()=>setShowForm(false)}>✕ Cerrar</span>
+          </div>
+          <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+            {[["Nombre *","nombre","text"],["Ubicación","ubicacion","text"],["Precio COP","precio","text"],["M2","m2","number"],["Habitaciones","habitaciones","number"],["Baños","banos","number"],["Notas","notas","text"]].map(([label,field,type])=>(
+              <div key={field}>
+                <div className="sim-label">{label}</div>
+                <input className="sim-input" type={type} value={form[field]} onChange={e=>setForm({...form,[field]:e.target.value})} />
+              </div>
+            ))}
+            <div>
+              <div className="sim-label">Estado</div>
+              <select className="sim-select" value={form.estado} onChange={e=>setForm({...form,estado:e.target.value})}>
+                {["Disponible","Reservado","Vendido","Arrendado"].map(s=><option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div style={{display:"flex",alignItems:"flex-end"}}>
+              <button className="btn btn-gold" style={{width:"100%",justifyContent:"center"}} onClick={save} disabled={saving}>
+                {saving?"Guardando...":"💾 Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="filter-tabs">
         {tabs.map(t => (
@@ -1751,31 +1833,37 @@ function Propiedades() {
         ))}
       </div>
 
-      <div className="props-grid">
-        {filtered.map(p => (
-          <div className="prop-card" key={p.id}>
-            <div className="prop-img">
-              <div className="prop-img-bg" style={{background:p.bg}}>{p.emoji}</div>
-              <div className={`prop-badge ${p.estado==="Disponible"?"badge-disponible":p.estado==="Reservado"?"badge-reservado":"badge-vendido"}`}>
-                {p.estado}
+      {loading ? (
+        <div style={{textAlign:"center",padding:40,color:"var(--text3)"}}>Cargando propiedades...</div>
+      ) : (
+        <div className="props-grid">
+          {filtered.length === 0 ? (
+            <div style={{color:"var(--text3)",fontSize:12,padding:20}}>No hay propiedades en esta categoría</div>
+          ) : filtered.map((p,i) => (
+            <div className="prop-card" key={p.id}>
+              <div className="prop-img">
+                <div className="prop-img-bg" style={{background:bgFor(i)}}>{emojiFor(p.notas)}</div>
+                <div className={`prop-badge ${p.estado==="Disponible"?"badge-disponible":p.estado==="Reservado"?"badge-reservado":"badge-vendido"}`}>
+                  {p.estado}
+                </div>
+              </div>
+              <div className="prop-info">
+                <div className="prop-name">{p.nombre}</div>
+                <div className="prop-location">📍 {p.ubicacion}</div>
+                <div className="prop-specs">
+                  {p.m2 && <span className="spec">⬛ {p.m2} m²</span>}
+                  {p.habitaciones && <span className="spec">🛏 {p.habitaciones} hab.</span>}
+                  {p.banos && <span className="spec">🚿 {p.banos} baños</span>}
+                  {p.notas && <span className="spec">📋 {p.notas}</span>}
+                </div>
+                <div className="prop-footer">
+                  <div className="prop-price">{p.precio}</div>
+                </div>
               </div>
             </div>
-            <div className="prop-info">
-              <div className="prop-name">{p.nombre}</div>
-              <div className="prop-location">📍 {p.ubicacion}</div>
-              <div className="prop-specs">
-                <span className="spec">⬛ {p.m2} m²</span>
-                <span className="spec">🛏 {p.hab} hab.</span>
-                <span className="spec">🚿 {p.banos} baños</span>
-              </div>
-              <div className="prop-footer">
-                <div className="prop-price">{p.precio}</div>
-                <div className="prop-visits">👁 {p.visitas} visitas</div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
