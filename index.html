@@ -1954,36 +1954,140 @@ function Agenda() {
 }
 
 function Seguimiento() {
-  const [tasks, setTasks] = useState(tareas);
+  const [prospectos, setProspectos] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [actividades, setActividades] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingAct, setLoadingAct] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ tipo:"Llamada", descripcion:"", fecha: new Date().toISOString().slice(0,16) });
+
+  const tipoIcon = { "Llamada":"📞", "Visita":"🏠", "Email":"📧", "WhatsApp":"💬", "Nota":"📝", "Otro":"⭐" };
+  const tipoColor = { "Llamada":"var(--blue)", "Visita":"var(--green)", "Email":"var(--gold)", "WhatsApp":"var(--green)", "Nota":"var(--amber)", "Otro":"var(--text3)" };
+  const tipoBg = { "Llamada":"var(--blue-dim)", "Visita":"var(--green-dim)", "Email":"var(--gold-dim)", "WhatsApp":"var(--green-dim)", "Nota":"var(--amber-dim)", "Otro":"var(--ink3)" };
+
+  const selected = prospectos.find(p=>p.id===selectedId);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const data = await supa.from("prospectos").select("*");
+      const arr = Array.isArray(data) ? data : [];
+      setProspectos(arr);
+      if (arr.length > 0) setSelectedId(arr[0].id);
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const loadAct = async () => {
+      setLoadingAct(true);
+      const data = await supa.from("actividades").select("*");
+      const arr = Array.isArray(data) ? data.filter(a=>a.prospecto_id===selectedId) : [];
+      setActividades(arr);
+      setLoadingAct(false);
+    };
+    loadAct();
+  }, [selectedId]);
+
+  const saveActividad = async () => {
+    if (!form.descripcion.trim() || !selectedId) return;
+    setSaving(true);
+    await supa.from("actividades").insert({
+      prospecto_id: selectedId,
+      tipo: form.tipo,
+      descripcion: form.descripcion,
+      fecha: form.fecha,
+      agente: "Paula Rodriguez"
+    });
+    setForm({ tipo:"Llamada", descripcion:"", fecha: new Date().toISOString().slice(0,16) });
+    setShowForm(false);
+    setSaving(false);
+    // Reload actividades
+    const data = await supa.from("actividades").select("*");
+    const arr = Array.isArray(data) ? data.filter(a=>a.prospecto_id===selectedId) : [];
+    setActividades(arr);
+  };
+
+  const formatDate = (d) => {
+    if (!d) return "";
+    return new Date(d).toLocaleDateString("es-CO", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
+  };
+
+  if (loading) return <div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Cargando prospectos...</div>;
+
   return (
     <div>
       <div className="page-header">
         <div>
           <div className="page-heading">Seguimiento y <span>Actividades</span></div>
-          <div className="page-sub">Carlos Mendoza · Último contacto hace 15 min</div>
+          <div className="page-sub">{selected ? `${selected.nombre} · ${actividades.length} actividades registradas` : "Selecciona un prospecto"}</div>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button className="btn btn-ghost">← Cambiar prospecto</button>
-          <button className="btn btn-gold">+ Registrar actividad</button>
+          <select className="sim-select" style={{width:220}} value={selectedId||""} onChange={e=>setSelectedId(e.target.value)}>
+            {prospectos.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+          <button className="btn btn-gold" onClick={()=>setShowForm(!showForm)}>+ Registrar actividad</button>
         </div>
       </div>
+
+      {showForm && (
+        <div className="panel" style={{marginBottom:20}}>
+          <div className="panel-header">
+            <div className="panel-title">Nueva Actividad — {selected?.nombre}</div>
+            <span className="panel-action" onClick={()=>setShowForm(false)}>✕ Cerrar</span>
+          </div>
+          <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+            <div>
+              <div className="sim-label">Tipo de actividad</div>
+              <select className="sim-select" value={form.tipo} onChange={e=>setForm({...form,tipo:e.target.value})}>
+                {["Llamada","Visita","Email","WhatsApp","Nota","Otro"].map(t=><option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="sim-label">Fecha y hora</div>
+              <input className="sim-input" type="datetime-local" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})} />
+            </div>
+            <div style={{display:"flex",alignItems:"flex-end"}}>
+              <button className="btn btn-gold" style={{width:"100%",justifyContent:"center"}} onClick={saveActividad} disabled={saving}>
+                {saving?"Guardando...":"💾 Guardar"}
+              </button>
+            </div>
+            <div style={{gridColumn:"1/-1"}}>
+              <div className="sim-label">Descripción / Notas *</div>
+              <input className="sim-input" placeholder="¿Qué pasó en este contacto?" value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="follow-grid">
         <div className="panel">
           <div className="panel-header">
             <div className="panel-title">Historial de contacto</div>
-            <span className="panel-action">4 actividades</span>
+            <span className="panel-action">{actividades.length} actividades</span>
           </div>
           <div className="timeline-list">
-            {timelineData.map((t,i) => (
+            {loadingAct ? (
+              <div style={{padding:20,textAlign:"center",color:"var(--text3)"}}>Cargando...</div>
+            ) : actividades.length === 0 ? (
+              <div style={{padding:20,textAlign:"center",color:"var(--text3)"}}>
+                Sin actividades aún. ¡Registra el primer contacto! 👆
+              </div>
+            ) : actividades.map((a,i) => (
               <div className="tl-item" key={i}>
                 <div className="tl-dot-wrap">
-                  <div className="tl-dot" style={{background:t.bg}}>{t.icon}</div>
+                  <div className="tl-dot" style={{background:tipoBg[a.tipo]||"var(--ink3)"}}>
+                    {tipoIcon[a.tipo]||"⭐"}
+                  </div>
                 </div>
                 <div className="tl-body">
-                  <div className="tl-title">{t.title}</div>
-                  <div className="tl-desc">{t.desc}</div>
-                  <div className="tl-time">{t.time}</div>
+                  <div className="tl-title">{a.tipo}</div>
+                  <div className="tl-desc">{a.descripcion}</div>
+                  <div className="tl-time">{formatDate(a.fecha)} · {a.agente}</div>
                 </div>
               </div>
             ))}
@@ -1991,45 +2095,45 @@ function Seguimiento() {
         </div>
 
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div className="panel">
-            <div className="panel-header">
-              <div className="panel-title">Tareas pendientes</div>
-              <span className="panel-action">{tasks.filter(t=>!t.done).length} activas</span>
-            </div>
-            <div className="tasks-list">
-              {tasks.map((t,i) => (
-                <div className="task-item" key={i} onClick={()=>{
-                  const copy=[...tasks]; copy[i]={...copy[i],done:!copy[i].done}; setTasks(copy);
-                }}>
-                  <div className={`task-check${t.done?" done":""}`}>{t.done?"✓":""}</div>
-                  <div className="task-body">
-                    <div className="task-title" style={{textDecoration:t.done?"line-through":"none",opacity:t.done?0.5:1}}>{t.title}</div>
-                    <div className="task-meta">{t.meta}</div>
+          {selected && (
+            <div className="panel">
+              <div className="panel-header">
+                <div className="panel-title">Ficha del prospecto</div>
+              </div>
+              <div className="panel-body">
+                {[
+                  ["Nombre", selected.nombre],
+                  ["Email", selected.email || "—"],
+                  ["Teléfono", selected.telefono || "—"],
+                  ["Tipo", selected.tipo || "—"],
+                  ["Presupuesto", selected.presupuesto || "—"],
+                  ["Fuente", selected.fuente || "—"],
+                  ["Estado", selected.estado || "—"],
+                  ["Notas", selected.notas || "—"],
+                ].map(([k,v],i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid var(--border)",fontSize:12}}>
+                    <span style={{color:"var(--text3)"}}>{k}</span>
+                    <span style={{color:"var(--text)",fontWeight:500,maxWidth:180,textAlign:"right"}}>{v}</span>
                   </div>
-                  <span className={`task-priority priority-${t.priority}`}>
-                    {t.priority.charAt(0).toUpperCase()+t.priority.slice(1)}
-                  </span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="panel">
             <div className="panel-header">
-              <div className="panel-title">Ficha del prospecto</div>
+              <div className="panel-title">Tipos de actividad</div>
             </div>
             <div className="panel-body">
-              {[
-                ["Nombre","Carlos Mendoza"],["Email","c.mendoza@gmail.com"],
-                ["Teléfono","+52 55 1234-5678"],["Tipo","Comprador"],
-                ["Presupuesto","$320,000"],["Fuente","Referido"],
-                ["Estado pipeline","Visita agendada"],["Agente","Paula Rodriguez"],
-              ].map(([k,v],i)=>(
-                <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid var(--border)",fontSize:12}}>
-                  <span style={{color:"var(--text3)"}}>{k}</span>
-                  <span style={{color:"var(--text)",fontWeight:500}}>{v}</span>
-                </div>
-              ))}
+              {["Llamada","Visita","Email","WhatsApp","Nota"].map(tipo=>{
+                const count = actividades.filter(a=>a.tipo===tipo).length;
+                return (
+                  <div key={tipo} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid var(--border)",fontSize:12}}>
+                    <span style={{color:"var(--text3)"}}>{tipoIcon[tipo]} {tipo}</span>
+                    <span style={{color:tipoColor[tipo],fontWeight:600}}>{count}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
