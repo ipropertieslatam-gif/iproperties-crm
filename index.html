@@ -1869,41 +1869,153 @@ function Propiedades() {
 }
 
 function Agenda() {
-  const [selDay, setSelDay] = useState(25);
-  const weekDays = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
-  // May 2026 starts on Friday (index 5)
-  const startOffset = 5;
-  const allDays = [...Array(startOffset).fill(null), ...Array(31).fill(0).map((_,i)=>i+1)];
+  const today = new Date();
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
+  const [selDay, setSelDay] = useState(today.getDate());
+  const [visitas, setVisitas] = useState([]);
+  const [prospectos, setProspectos] = useState([]);
+  const [propiedades, setPropiedades] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ prospecto_id:"", propiedad_id:"", fecha:"", hora:"09:00", estado:"Pendiente", notas:"" });
 
-  const slotsForDay = {
-    25: visitasHoy,
-    22: [
-      {hora:"10:00",ampm:"AM",cliente:"Roberto Fuentes",apt:"Residencial Bosque 12A",estado:"done"},
-      {hora:"03:00",ampm:"PM",cliente:"Sofía Ramírez",apt:"Patio Central 15",estado:"done"},
-    ],
-    28: [
-      {hora:"11:00",ampm:"AM",cliente:"Jorge Vargas",apt:"Sky Residences 902",estado:"confirmed"},
-    ],
+  const weekDays = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+  const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+  const daysInMonth = new Date(currentYear, currentMonth+1, 0).getDate();
+  const startOffset = new Date(currentYear, currentMonth, 1).getDay();
+  const allDays = [...Array(startOffset).fill(null), ...Array(daysInMonth).fill(0).map((_,i)=>i+1)];
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [v, p, pr] = await Promise.all([
+      supa.from("visitas").select("*"),
+      supa.from("prospectos").select("*"),
+      supa.from("propiedades").select("*"),
+    ]);
+    setVisitas(Array.isArray(v) ? v : []);
+    setProspectos(Array.isArray(p) ? p : []);
+    setPropiedades(Array.isArray(pr) ? pr : []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const visitasDelDia = visitas.filter(v => {
+    if (!v.fecha) return false;
+    const d = new Date(v.fecha);
+    return d.getDate()===selDay && d.getMonth()===currentMonth && d.getFullYear()===currentYear;
+  });
+
+  const diasConVisitas = new Set(visitas.filter(v=>{
+    if (!v.fecha) return false;
+    const d = new Date(v.fecha);
+    return d.getMonth()===currentMonth && d.getFullYear()===currentYear;
+  }).map(v=>new Date(v.fecha).getDate()));
+
+  const save = async () => {
+    if (!form.prospecto_id || !form.fecha) return;
+    setSaving(true);
+    const fechaCompleta = `${form.fecha}T${form.hora}:00`;
+    await supa.from("visitas").insert({
+      prospecto_id: form.prospecto_id || null,
+      propiedad_id: form.propiedad_id || null,
+      fecha: fechaCompleta,
+      estado: form.estado,
+      notas: form.notas,
+    });
+    setForm({ prospecto_id:"", propiedad_id:"", fecha:"", hora:"09:00", estado:"Pendiente", notas:"" });
+    setShowForm(false);
+    setSaving(false);
+    load();
   };
-  const slots = slotsForDay[selDay] || [];
+
+  const getNombreProspecto = (id) => prospectos.find(p=>p.id===id)?.nombre || "—";
+  const getNombrePropiedad = (id) => propiedades.find(p=>p.id===id)?.nombre || "—";
+
+  const formatHora = (fecha) => {
+    if (!fecha) return "";
+    return new Date(fecha).toLocaleTimeString("es-CO", { hour:"2-digit", minute:"2-digit" });
+  };
+
+  const estadoCls = (e) => e==="Confirmada"?"confirmed":e==="Realizada"?"done":"pending";
 
   return (
     <div>
       <div className="page-header">
         <div>
           <div className="page-heading">Agenda de <span>Visitas</span></div>
-          <div className="page-sub">Mayo 2026 · 18 visitas programadas este mes</div>
+          <div className="page-sub">{visitas.length} visitas registradas · {visitasDelDia.length} hoy</div>
         </div>
-        <button className="btn btn-gold">+ Agendar visita</button>
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn btn-ghost" onClick={load}>↻ Actualizar</button>
+          <button className="btn btn-gold" onClick={()=>setShowForm(!showForm)}>+ Agendar visita</button>
+        </div>
       </div>
+
+      {showForm && (
+        <div className="panel" style={{marginBottom:20}}>
+          <div className="panel-header">
+            <div className="panel-title">Nueva Visita</div>
+            <span className="panel-action" onClick={()=>setShowForm(false)}>✕ Cerrar</span>
+          </div>
+          <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+            <div>
+              <div className="sim-label">Prospecto *</div>
+              <select className="sim-select" value={form.prospecto_id} onChange={e=>setForm({...form,prospecto_id:e.target.value})}>
+                <option value="">Seleccionar...</option>
+                {prospectos.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="sim-label">Propiedad</div>
+              <select className="sim-select" value={form.propiedad_id} onChange={e=>setForm({...form,propiedad_id:e.target.value})}>
+                <option value="">Seleccionar...</option>
+                {propiedades.filter(p=>p.estado==="Disponible").map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="sim-label">Estado</div>
+              <select className="sim-select" value={form.estado} onChange={e=>setForm({...form,estado:e.target.value})}>
+                {["Pendiente","Confirmada","Realizada","No asistió","Reprogramada"].map(s=><option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="sim-label">Fecha *</div>
+              <input className="sim-input" type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})} />
+            </div>
+            <div>
+              <div className="sim-label">Hora</div>
+              <input className="sim-input" type="time" value={form.hora} onChange={e=>setForm({...form,hora:e.target.value})} />
+            </div>
+            <div>
+              <div className="sim-label">Notas</div>
+              <input className="sim-input" placeholder="Observaciones..." value={form.notas} onChange={e=>setForm({...form,notas:e.target.value})} />
+            </div>
+            <div style={{display:"flex",alignItems:"flex-end"}}>
+              <button className="btn btn-gold" style={{width:"100%",justifyContent:"center"}} onClick={save} disabled={saving}>
+                {saving?"Guardando...":"💾 Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="calendar-wrap">
         <div className="cal-grid">
           <div className="cal-header">
-            <div className="cal-month">Mayo 2026</div>
+            <div className="cal-month">{monthNames[currentMonth]} {currentYear}</div>
             <div className="cal-nav">
-              <div className="cal-nav-btn">‹</div>
-              <div className="cal-nav-btn">›</div>
+              <div className="cal-nav-btn" onClick={()=>{
+                if(currentMonth===0){setCurrentMonth(11);setCurrentYear(y=>y-1);}
+                else setCurrentMonth(m=>m-1);
+              }}>‹</div>
+              <div className="cal-nav-btn" onClick={()=>{
+                if(currentMonth===11){setCurrentMonth(0);setCurrentYear(y=>y+1);}
+                else setCurrentMonth(m=>m+1);
+              }}>›</div>
             </div>
           </div>
           <div className="cal-days-header">
@@ -1913,11 +2025,11 @@ function Agenda() {
             {allDays.map((d,i) => (
               <div
                 key={i}
-                className={`cal-day${d===null?" other-month":""}${d===25?" today":""}${d&&eventDays.includes(d)?" has-event":""}${d===selDay?" selected":""}`}
+                className={`cal-day${d===null?" other-month":""}${d===today.getDate()&&currentMonth===today.getMonth()?" today":""}${d&&diasConVisitas.has(d)?" has-event":""}${d===selDay?" selected":""}`}
                 onClick={()=>d&&setSelDay(d)}
               >
                 {d || ""}
-                {d && eventDays.includes(d) && <div className="event-dot" />}
+                {d && diasConVisitas.has(d) && <div className="event-dot" />}
               </div>
             ))}
           </div>
@@ -1926,27 +2038,30 @@ function Agenda() {
         <div className="slots-panel">
           <div className="panel-header">
             <div className="panel-title">
-              {selDay ? `${selDay} de mayo` : "Selecciona un día"}
+              {selDay ? `${selDay} de ${monthNames[currentMonth]}` : "Selecciona un día"}
             </div>
-            <span className="panel-action">{slots.length} visitas</span>
+            <span className="panel-action">{visitasDelDia.length} visitas</span>
           </div>
-          {slots.length > 0 ? slots.map((s,i) => (
-            <div className="slot-item" key={i}>
-              <div className="slot-time">{s.hora}<br/><span style={{fontSize:10,color:"var(--text3)"}}>{s.ampm}</span></div>
-              <div className="slot-body">
-                <div className="slot-client">{s.cliente}</div>
-                <div className="slot-apt">{s.apt}</div>
-                <div className="slot-agent">Agente: Paula Rodriguez</div>
-              </div>
-              <span className={`visit-status status-${s.estado}`}>
-                {s.estado==="confirmed"?"Confirmada":s.estado==="pending"?"Pendiente":"Realizada"}
-              </span>
-            </div>
-          )) : (
+          {loading ? (
+            <div style={{padding:"32px 20px",textAlign:"center",color:"var(--text3)"}}>Cargando...</div>
+          ) : visitasDelDia.length === 0 ? (
             <div style={{padding:"32px 20px",textAlign:"center",color:"var(--text3)"}}>
-              Sin visitas para este día
+              Sin visitas para este día.<br/>
+              <span style={{fontSize:11,marginTop:8,display:"block"}}>Clic en "+ Agendar visita" para agregar</span>
             </div>
-          )}
+          ) : visitasDelDia.map((v,i) => (
+            <div className="slot-item" key={i}>
+              <div className="slot-time">
+                {formatHora(v.fecha)}
+              </div>
+              <div className="slot-body">
+                <div className="slot-client">{getNombreProspecto(v.prospecto_id)}</div>
+                <div className="slot-apt">{getNombrePropiedad(v.propiedad_id)}</div>
+                {v.notas && <div className="slot-agent">📝 {v.notas}</div>}
+              </div>
+              <span className={`visit-status status-${estadoCls(v.estado)}`}>{v.estado}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
