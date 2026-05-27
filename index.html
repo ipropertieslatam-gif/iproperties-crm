@@ -2619,10 +2619,16 @@ function CRM() {
           </nav>
           <div className="sidebar-footer">
             <div className="agent-card">
-              <div className="agent-avatar">PR</div>
+              <div className="agent-avatar" style={{background:"linear-gradient(135deg,var(--gold),#8b6832)",color:"var(--ink)",fontSize:12,fontWeight:600}}>
+                {session?.user?.email === "rbeltranmartinez@gmail.com" ? "RB" : "PR"}
+              </div>
               <div>
-                <div className="agent-name">Paula Rodriguez</div>
-                <div className="agent-role">Gerente Comercial</div>
+                <div className="agent-name">
+                  {session?.user?.email === "rbeltranmartinez@gmail.com" ? "Roberth Beltrán" : "Paula Rodriguez"}
+                </div>
+                <div className="agent-role">
+                  {session?.user?.email === "rbeltranmartinez@gmail.com" ? "Gerente Legal" : "Gerente Comercial"}
+                </div>
               </div>
             </div>
           </div>
@@ -2632,6 +2638,9 @@ function CRM() {
           <header className="topbar">
             <div className="topbar-title">
               iProperties <span>·</span> {navItems.find(n=>n.section===active)?.label || "CRM"}
+              <span style={{fontSize:12,color:"var(--text3)",marginLeft:16,fontFamily:"DM Sans,sans-serif"}}>
+                Hola, {session?.user?.email === "rbeltranmartinez@gmail.com" ? "Roberth" : "Paula"} 👋
+              </span>
             </div>
             <div className="search-bar">
               🔍 <input placeholder="Buscar prospecto, propiedad..." />
