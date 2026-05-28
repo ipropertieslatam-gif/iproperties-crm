@@ -2754,6 +2754,220 @@ function CreditosHipotecarios() {
   );
 }
 
+
+// ── MÓDULO DE METAS ──────────────────────────────────────
+function Metas() {
+  const [prospectos, setProspectos] = useState([]);
+  const [propiedades, setPropiedades] = useState([]);
+  const [visitas, setVisitas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [metas, setMetas] = useState({
+    prospectos: 80,
+    visitas: 40,
+    negociaciones: 20,
+    cierres: 10,
+  });
+  const [editando, setEditando] = useState(false);
+  const [tempMetas, setTempMetas] = useState({...metas});
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const [p, pr, v] = await Promise.all([
+        supa.from("prospectos").select("*"),
+        supa.from("propiedades").select("*"),
+        supa.from("visitas").select("*"),
+      ]);
+      setProspectos(Array.isArray(p) ? p : []);
+      setPropiedades(Array.isArray(pr) ? pr : []);
+      setVisitas(Array.isArray(v) ? v : []);
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const now = new Date();
+  const mesActual = now.toLocaleDateString("es-CO", { month:"long", year:"numeric" });
+
+  // Calcular reales
+  const reales = {
+    prospectos: prospectos.length,
+    visitas: visitas.length,
+    negociaciones: prospectos.filter(p=>p.estado==="Negociación").length,
+    cierres: propiedades.filter(p=>p.estado==="Vendido").length,
+  };
+
+  const pct = (real, meta) => Math.min(Math.round((real/meta)*100), 100);
+  const color = (p) => p >= 100 ? "var(--green)" : p >= 60 ? "var(--gold)" : p >= 30 ? "var(--amber)" : "var(--red)";
+
+  const kpis = [
+    { label:"Prospectos nuevos", icon:"👥", real:reales.prospectos, meta:metas.prospectos, color:"var(--gold)" },
+    { label:"Visitas agendadas", icon:"🏠", real:reales.visitas, meta:metas.visitas, color:"var(--blue)" },
+    { label:"En negociación", icon:"🤝", real:reales.negociaciones, meta:metas.negociaciones, color:"var(--amber)" },
+    { label:"Cierres del mes", icon:"🏆", real:reales.cierres, meta:metas.cierres, color:"var(--green)" },
+  ];
+
+  // Pipeline breakdown
+  const pipeline = [
+    { label:"Nuevos", count: prospectos.filter(p=>p.estado==="Nuevo").length, color:"var(--blue)" },
+    { label:"Contactados", count: prospectos.filter(p=>p.estado==="Contactado").length, color:"var(--gold)" },
+    { label:"Interesados", count: prospectos.filter(p=>p.estado==="Interesado").length, color:"var(--amber)" },
+    { label:"Visita agendada", count: prospectos.filter(p=>p.estado==="Visita agendada").length, color:"var(--green)" },
+    { label:"Negociación", count: prospectos.filter(p=>p.estado==="Negociación").length, color:"var(--green)" },
+    { label:"Cerrado", count: prospectos.filter(p=>p.estado==="Cerrado").length, color:"var(--text3)" },
+    { label:"Perdido", count: prospectos.filter(p=>p.estado==="Perdido").length, color:"var(--red)" },
+  ];
+
+  // Ingreso estimado
+  const ingresoEstimado = reales.cierres * 6000000;
+  const ingresoMeta = metas.cierres * 6000000;
+  const fmt = (n) => "$ " + n.toLocaleString("es-CO");
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <div className="page-heading">Módulo de <span>Metas</span></div>
+          <div className="page-sub" style={{textTransform:"capitalize"}}>{mesActual} · iProperties Latam</div>
+        </div>
+        <button className="btn btn-gold" onClick={()=>{ setTempMetas({...metas}); setEditando(!editando); }}>
+          {editando ? "✕ Cancelar" : "✏️ Editar metas"}
+        </button>
+      </div>
+
+      {editando && (
+        <div className="panel" style={{marginBottom:20}}>
+          <div className="panel-header">
+            <div className="panel-title">Configurar metas del mes</div>
+          </div>
+          <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12}}>
+            {[
+              ["Meta prospectos","prospectos"],
+              ["Meta visitas","visitas"],
+              ["Meta negociaciones","negociaciones"],
+              ["Meta cierres","cierres"],
+            ].map(([label,key])=>(
+              <div key={key}>
+                <div className="sim-label">{label}</div>
+                <input className="sim-input" type="number" value={tempMetas[key]}
+                  onChange={e=>setTempMetas({...tempMetas,[key]:parseInt(e.target.value)||0})} />
+              </div>
+            ))}
+            <div style={{display:"flex",alignItems:"flex-end",gridColumn:"span 4",justifyContent:"flex-end"}}>
+              <button className="btn btn-gold" onClick={()=>{ setMetas({...tempMetas}); setEditando(false); }}>
+                💾 Guardar metas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{textAlign:"center",padding:40,color:"var(--text3)"}}>Cargando datos...</div>
+      ) : (
+        <>
+          {/* KPI Cards con progreso */}
+          <div className="kpi-row" style={{marginBottom:20}}>
+            {kpis.map((k,i) => {
+              const p = pct(k.real, k.meta);
+              return (
+                <div className="kpi-card" key={i} style={{"--accent-color":k.color}}>
+                  <div className="kpi-icon">{k.icon}</div>
+                  <div className="kpi-label">{k.label}</div>
+                  <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                    <div className="kpi-value" style={{color:color(p)}}>{k.real}</div>
+                    <div style={{fontSize:13,color:"var(--text3)"}}>/ {k.meta}</div>
+                  </div>
+                  <div style={{margin:"8px 0 6px"}}>
+                    <div style={{height:4,background:"var(--ink3)",borderRadius:2,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${p}%`,background:color(p),borderRadius:2,transition:"width 0.6s ease"}} />
+                    </div>
+                  </div>
+                  <div style={{fontSize:11,color:color(p),fontWeight:600}}>{p}% de la meta</div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}}>
+            {/* Ingreso estimado */}
+            <div className="panel">
+              <div className="panel-header">
+                <div className="panel-title">Ingreso estimado del mes</div>
+              </div>
+              <div className="panel-body">
+                <div style={{textAlign:"center",padding:"16px 0"}}>
+                  <div style={{fontFamily:"Cormorant Garamond,serif",fontSize:36,color:"var(--gold2)",fontWeight:300}}>
+                    {fmt(ingresoEstimado)}
+                  </div>
+                  <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>ingreso real estimado</div>
+                  <div style={{height:4,background:"var(--ink3)",borderRadius:2,overflow:"hidden",margin:"16px 0 8px"}}>
+                    <div style={{height:"100%",width:`${pct(ingresoEstimado,ingresoMeta)}%`,background:"linear-gradient(90deg,var(--gold),var(--gold2))",borderRadius:2}} />
+                  </div>
+                  <div style={{fontSize:11,color:"var(--text3)"}}>Meta: {fmt(ingresoMeta)} · {pct(ingresoEstimado,ingresoMeta)}% alcanzado</div>
+                </div>
+                <div style={{borderTop:"1px solid var(--border)",paddingTop:12,marginTop:4}}>
+                  {[
+                    ["Comisión por cierre (3%)", fmt(6000000)],
+                    [`${reales.cierres} cierres realizados`, fmt(ingresoEstimado)],
+                    [`Meta ${metas.cierres} cierres`, fmt(ingresoMeta)],
+                  ].map(([k,v],i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid var(--border)",fontSize:12}}>
+                      <span style={{color:"var(--text3)"}}>{k}</span>
+                      <span style={{color:"var(--text)",fontWeight:500}}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Pipeline breakdown */}
+            <div className="panel">
+              <div className="panel-header">
+                <div className="panel-title">Estado del pipeline</div>
+                <span className="panel-action">{prospectos.length} prospectos</span>
+              </div>
+              <div className="panel-body">
+                {pipeline.map((p,i) => (
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid var(--border)"}}>
+                    <div style={{fontSize:11,color:"var(--text3)",width:120,flexShrink:0}}>{p.label}</div>
+                    <div style={{flex:1,height:6,background:"var(--ink3)",borderRadius:3,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${prospectos.length>0?(p.count/prospectos.length)*100:0}%`,background:p.color,borderRadius:3}} />
+                    </div>
+                    <div style={{fontSize:12,color:p.color,fontWeight:600,minWidth:24,textAlign:"right"}}>{p.count}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Inventario */}
+          <div className="panel">
+            <div className="panel-header">
+              <div className="panel-title">Estado del inventario</div>
+              <span className="panel-action">{propiedades.length} propiedades</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:0}}>
+              {[
+                { label:"Disponibles", val:propiedades.filter(p=>p.estado==="Disponible").length, color:"var(--green)", icon:"✅" },
+                { label:"Reservadas", val:propiedades.filter(p=>p.estado==="Reservado").length, color:"var(--amber)", icon:"⏳" },
+                { label:"Vendidas", val:propiedades.filter(p=>p.estado==="Vendido").length, color:"var(--red)", icon:"🏆" },
+                { label:"Total", val:propiedades.length, color:"var(--gold)", icon:"🏠" },
+              ].map((item,i)=>(
+                <div key={i} style={{padding:"20px",textAlign:"center",borderRight:i<3?"1px solid var(--border)":"none"}}>
+                  <div style={{fontSize:24,marginBottom:6}}>{item.icon}</div>
+                  <div style={{fontFamily:"Cormorant Garamond,serif",fontSize:32,color:item.color,fontWeight:300}}>{item.val}</div>
+                  <div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>{item.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── APP ───────────────────────────────────────────────────
 const navItems = [
   { icon:"⬛", label:"Dashboard", section:"general" },
@@ -2763,6 +2977,7 @@ const navItems = [
   { icon:"📋", label:"Seguimiento", section:"seguimiento", badge:"3" },
   { icon:"⚖️", label:"Asesoría Legal", section:"legal" },
   { icon:"🏦", label:"Créditos", section:"creditos" },
+  { icon:"🎯", label:"Metas", section:"metas" },
   { icon:"📊", label:"Reportes", section:"reportes" },
 ];
 
@@ -2801,6 +3016,7 @@ function CRM() {
       case "seguimiento": return <Seguimiento />;
       case "legal": return <AsesoriaLegal />;
       case "creditos": return <CreditosHipotecarios />;
+      case "metas": return <Metas />;
       case "reportes": return (
         <div style={{padding:"40px 0",textAlign:"center"}}>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:32,color:"var(--text)",marginBottom:8}}>Reportes <span style={{color:"var(--gold)",fontStyle:"italic"}}>& Análisis</span></div>
