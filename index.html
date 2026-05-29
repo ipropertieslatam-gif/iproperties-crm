@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+}<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
@@ -3195,6 +3195,12 @@ function GaleriaModal({ propiedad, onClose }) {
           <input type="file" accept="image/*" multiple style={{display:"none"}}
             onChange={handleUpload} disabled={uploading} />
         </label>
+        {selectedFoto && (
+          <div className="gallery-upload-btn" style={{background:"var(--gold-dim)",borderColor:"var(--gold)"}} onClick={async()=>{
+            await supa.from("propiedades").update({ foto_url: selectedFoto.url }, { id: propiedad.id });
+            alert("✅ Foto de portada actualizada");
+          }}>⭐ Portada</div>
+        )}
         {selectedFoto && (
           <div className="gallery-delete-btn" onClick={handleDelete}>🗑 Eliminar</div>
         )}
