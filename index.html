@@ -1813,6 +1813,9 @@ function Propiedades() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [galeriaPropiedad, setGaleriaPropiedad] = useState(null);
+  const [editPropiedad, setEditPropiedad] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [editSaving, setEditSaving] = useState(false);
   const [form, setForm] = useState({ nombre:"", ubicacion:"", precio:"", estado:"Disponible", m2:"", habitaciones:"", banos:"", notas:"" });
 
   const tabs = ["Todas","Disponibles","Vendidas"];
@@ -1857,6 +1860,34 @@ function Propiedades() {
     setForm({ nombre:"", ubicacion:"", precio:"", estado:"Disponible", m2:"", habitaciones:"", banos:"", notas:"" });
     setShowForm(false);
     setSaving(false);
+    load();
+  };
+
+  const openEdit = (p) => {
+    setEditPropiedad(p);
+    setEditForm({
+      nombre: p.nombre || "",
+      ubicacion: p.ubicacion || "",
+      precio: p.precio || "",
+      estado: p.estado || "Disponible",
+      m2: p.m2 || "",
+      habitaciones: p.habitaciones || "",
+      banos: p.banos || "",
+      notas: p.notas || "",
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editPropiedad) return;
+    setEditSaving(true);
+    await supa.from("propiedades").update({
+      ...editForm,
+      m2: editForm.m2 ? parseInt(editForm.m2) : null,
+      habitaciones: editForm.habitaciones ? parseInt(editForm.habitaciones) : null,
+      banos: editForm.banos ? parseInt(editForm.banos) : null,
+    }, { id: editPropiedad.id });
+    setEditPropiedad(null);
+    setEditSaving(false);
     load();
   };
 
@@ -1943,6 +1974,7 @@ function Propiedades() {
                 </div>
                 <div className="prop-footer">
                   <div className="prop-price">{p.precio}</div>
+                  <button className="btn btn-ghost" style={{fontSize:11,padding:"4px 10px"}} onClick={e=>{ e.stopPropagation(); openEdit(p); }}>✏️ Editar</button>
                 </div>
               </div>
             </div>
@@ -1951,6 +1983,37 @@ function Propiedades() {
       )}
       {galeriaPropiedad && (
         <GaleriaModal propiedad={galeriaPropiedad} onClose={()=>{ setGaleriaPropiedad(null); load(); }} />
+      )}
+
+      {editPropiedad && (
+        <div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div className="panel" style={{width:"100%",maxWidth:600}}>
+            <div className="panel-header">
+              <div className="panel-title">✏️ Editar — {editPropiedad.nombre}</div>
+              <span className="panel-action" onClick={()=>setEditPropiedad(null)}>✕ Cerrar</span>
+            </div>
+            <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              {[["Nombre *","nombre","text"],["Ubicación","ubicacion","text"],["Precio COP","precio","text"],["M2","m2","number"],["Habitaciones","habitaciones","number"],["Baños","banos","number"],["Notas","notas","text"]].map(([label,field,type])=>(
+                <div key={field}>
+                  <div className="sim-label">{label}</div>
+                  <input className="sim-input" type={type} value={editForm[field]||""} onChange={e=>setEditForm({...editForm,[field]:e.target.value})} />
+                </div>
+              ))}
+              <div>
+                <div className="sim-label">Estado</div>
+                <select className="sim-select" value={editForm.estado||"Disponible"} onChange={e=>setEditForm({...editForm,estado:e.target.value})}>
+                  {["Disponible","Reservado","Vendido","Arrendado"].map(s=><option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div style={{display:"flex",alignItems:"flex-end",gap:8}}>
+                <button className="btn btn-ghost" style={{flex:1,justifyContent:"center"}} onClick={()=>setEditPropiedad(null)}>Cancelar</button>
+                <button className="btn btn-gold" style={{flex:1,justifyContent:"center"}} onClick={saveEdit} disabled={editSaving}>
+                  {editSaving?"Guardando...":"💾 Guardar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
