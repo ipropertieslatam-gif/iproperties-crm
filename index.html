@@ -236,7 +236,18 @@ const supa = {
       });
       return res.ok;
     }
-  })
+  }),
+  uploadFoto: async (file, fileName) => {
+    const res = await fetch(`${SUPA_URL}/storage/v1/object/propiedades/${fileName}`, {
+      method: "POST",
+      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": file.type },
+      body: file
+    });
+    if (res.ok) {
+      return `${SUPA_URL}/storage/v1/object/public/propiedades/${fileName}`;
+    }
+    return null;
+  }
 };
 
 
@@ -1842,10 +1853,27 @@ function Propiedades() {
           ) : filtered.map((p,i) => (
             <div className="prop-card" key={p.id}>
               <div className="prop-img">
-                <div className="prop-img-bg" style={{background:bgFor(i)}}>{emojiFor(p.notas)}</div>
+                {p.foto_url ? (
+                  <img src={p.foto_url} alt={p.nombre} style={{width:"100%",height:"100%",objectFit:"cover",position:"absolute",top:0,left:0}} />
+                ) : (
+                  <div className="prop-img-bg" style={{background:bgFor(i)}}>{emojiFor(p.notas)}</div>
+                )}
                 <div className={`prop-badge ${p.estado==="Disponible"?"badge-disponible":p.estado==="Reservado"?"badge-reservado":"badge-vendido"}`}>
                   {p.estado}
                 </div>
+                <label style={{position:"absolute",bottom:8,right:8,zIndex:3,background:"rgba(0,0,0,0.7)",border:"1px solid var(--border2)",borderRadius:4,padding:"4px 8px",fontSize:10,color:"var(--gold)",cursor:"pointer",letterSpacing:"0.05em"}}>
+                  📷 Foto
+                  <input type="file" accept="image/*" style={{display:"none"}} onChange={async(e)=>{
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const fileName = `${p.id}_${Date.now()}.${file.name.split('.').pop()}`;
+                    const url = await supa.uploadFoto(file, fileName);
+                    if (url) {
+                      await supa.from("propiedades").update({foto_url: url}, {id: p.id});
+                      load();
+                    }
+                  }} />
+                </label>
               </div>
               <div className="prop-info">
                 <div className="prop-name">{p.nombre}</div>
