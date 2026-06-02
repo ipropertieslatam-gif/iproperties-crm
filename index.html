@@ -1702,6 +1702,15 @@ function Prospectos() {
     load();
   };
 
+  const saveEditProspecto = async () => {
+    if (!editProspecto) return;
+    setEditSavingP(true);
+    await supa.from("prospectos").update(editFormP, { id: editProspecto.id });
+    setEditProspecto(null);
+    setEditSavingP(false);
+    load();
+  };
+
   const tabs = ["Todos","Compradores","Vendedores","Nuevos","Negociación"];
   const filtered = tab === "Todos" ? prospectos
     : tab === "Compradores" ? prospectos.filter(p=>p.tipo==="Comprador")
@@ -1799,7 +1808,13 @@ function Prospectos() {
             <div className="td td-budget">{p.presupuesto}</div>
             <div className="td"><StatusBadge estado={p.estado} /></div>
             <div className="td" style={{color:"var(--text3)"}}>{p.fuente}</div>
-            <div className="td">
+            <div className="td" style={{display:"flex",gap:4}}>
+              <button className="btn btn-ghost" style={{fontSize:11,padding:"3px 8px"}}
+                onClick={e=>{ e.stopPropagation(); setEditProspecto(p); setEditFormP({
+                  nombre:p.nombre||"", email:p.email||"", telefono:p.telefono||"",
+                  tipo:p.tipo||"Comprador", presupuesto:p.presupuesto||"",
+                  estado:p.estado||"Nuevo", fuente:p.fuente||"", notas:p.notas||""
+                }); }}>✏️</button>
               <button className="btn btn-ghost" style={{fontSize:11,padding:"3px 8px",color:"var(--red)",borderColor:"var(--red-dim)"}}
                 onClick={async(e)=>{
                   e.stopPropagation();
@@ -2878,15 +2893,15 @@ function CreditosHipotecarios() {
   const fmt = (n) => "$ " + Math.round(n).toLocaleString("es-CO") + " COP";
 
   const bancos = [
-    { nombre:"AV Villas", emoji:"🟣", tasa:"13.20", cat:"15.1", plazoMax:20, financiamiento:"80%", ingMin:"$ 3,000,000", comision:"1.0%", best:true,  color:"var(--blue)" },
-    { nombre:"BBVA Colombia", emoji:"🔵", tasa:"13.50", cat:"15.8", plazoMax:20, financiamiento:"80%", ingMin:"$ 3,500,000", comision:"1.2%", best:false, color:"#1464a5" },
-    { nombre:"Caja Social", emoji:"🟡", tasa:"13.80", cat:"16.0", plazoMax:20, financiamiento:"80%", ingMin:"$ 2,500,000", comision:"0.8%", best:false, color:"var(--amber)" },
-    { nombre:"Banco de Bogotá", emoji:"🟢", tasa:"13.60", cat:"15.9", plazoMax:20, financiamiento:"80%", ingMin:"$ 3,200,000", comision:"1.1%", best:false, color:"var(--green)" },
-    { nombre:"Credifamilia", emoji:"🟠", tasa:"12.90", cat:"14.5", plazoMax:30, financiamiento:"90%", ingMin:"$ 2,000,000", comision:"Sin comisión", best:false, color:"#e07020" },
-    { nombre:"Banco W", emoji:"🔶", tasa:"14.20", cat:"16.5", plazoMax:15, financiamiento:"70%", ingMin:"$ 2,000,000", comision:"1.5%", best:false, color:"var(--gold)" },
-    { nombre:"Occidente", emoji:"🔷", tasa:"13.75", cat:"16.1", plazoMax:20, financiamiento:"80%", ingMin:"$ 3,000,000", comision:"1.0%", best:false, color:"var(--blue)" },
-    { nombre:"Hipocredit", emoji:"🏠", tasa:"13.40", cat:"15.5", plazoMax:20, financiamiento:"85%", ingMin:"$ 2,800,000", comision:"0.9%", best:false, color:"var(--red)" },
-    { nombre:"Bancolombia", emoji:"🟡", tasa:"13.30", cat:"15.3", plazoMax:20, financiamiento:"80%", ingMin:"$ 3,500,000", comision:"1.2%", best:false, color:"#f5a800" },
+    { nombre:"AV Villas", emoji:"🟣", tasa:"13.20", tasaCC:"18.50", cat:"15.1", plazoMax:20, financiamiento:"80%", ingMin:"$ 3,000,000", comision:"1.0%", best:true, color:"var(--blue)" },
+    { nombre:"BBVA Colombia", emoji:"🔵", tasa:"13.50", tasaCC:"19.20", cat:"15.8", plazoMax:20, financiamiento:"80%", ingMin:"$ 3,500,000", comision:"1.2%", best:false, color:"#1464a5" },
+    { nombre:"Caja Social", emoji:"🟡", tasa:"13.80", tasaCC:"20.10", cat:"16.0", plazoMax:20, financiamiento:"80%", ingMin:"$ 2,500,000", comision:"0.8%", best:false, color:"var(--amber)" },
+    { nombre:"Banco de Bogotá", emoji:"🟢", tasa:"13.60", tasaCC:"19.50", cat:"15.9", plazoMax:20, financiamiento:"80%", ingMin:"$ 3,200,000", comision:"1.1%", best:false, color:"var(--green)" },
+    { nombre:"Credifamilia", emoji:"🟠", tasa:"12.90", tasaCC:"N/A", cat:"14.5", plazoMax:30, financiamiento:"90%", ingMin:"$ 2,000,000", comision:"Sin comisión", best:false, color:"#e07020" },
+    { nombre:"Banco W", emoji:"🔶", tasa:"14.20", tasaCC:"22.00", cat:"16.5", plazoMax:15, financiamiento:"70%", ingMin:"$ 2,000,000", comision:"1.5%", best:false, color:"var(--gold)" },
+    { nombre:"Occidente", emoji:"🔷", tasa:"13.75", tasaCC:"19.80", cat:"16.1", plazoMax:20, financiamiento:"80%", ingMin:"$ 3,000,000", comision:"1.0%", best:false, color:"var(--blue)" },
+    { nombre:"Hipocredit", emoji:"🏠", tasa:"13.40", tasaCC:"18.90", cat:"15.5", plazoMax:20, financiamiento:"85%", ingMin:"$ 2,800,000", comision:"0.9%", best:false, color:"var(--red)" },
+    { nombre:"Bancolombia", emoji:"🟡", tasa:"13.30", tasaCC:"18.75", cat:"15.3", plazoMax:20, financiamiento:"80%", ingMin:"$ 3,500,000", comision:"1.2%", best:false, color:"#f5a800" },
   ];
 
   const solicitudes = [
@@ -3003,7 +3018,7 @@ function CreditosHipotecarios() {
       {tab === "bancos" && (
         <div>
           <div style={{background:"var(--gold-dim)",border:"1px solid rgba(201,169,110,0.25)",borderRadius:8,padding:"10px 16px",marginBottom:16,fontSize:12,color:"var(--gold2)"}}>
-            ⭐ Mejor opción actualmente: <strong>AV Villas</strong> con tasa del 13.20% anual · Menor CAT del mercado
+            ⭐ Mejor opción hipotecario: <strong>AV Villas</strong> 13.20% · Mejor compra de cartera: <strong>AV Villas</strong> 18.50%
           </div>
           <div className="banco-grid">
             {bancos.map((b,i) => (
@@ -3017,6 +3032,7 @@ function CreditosHipotecarios() {
                 <div className="banco-body">
                   {[
                     ["CAT", b.cat+"%"],
+                    ["Compra de cartera", b.tasaCC!=="N/A" ? b.tasaCC+"%" : "No aplica"],
                     ["Plazo máx.", b.plazoMax+" años"],
                     ["Financiamiento", b.financiamiento],
                     ["Ingreso mín.", b.ingMin],
@@ -3035,29 +3051,8 @@ function CreditosHipotecarios() {
       )}
 
       {tab === "solicitudes" && (
-        <div className="solicitud-table">
-          <div className="sol-head">
-            {["Prospecto","Banco","Monto crédito","Estado","Avance","Fecha"].map(h=>(
-              <div key={h} className="th">{h}</div>
-            ))}
-          </div>
-          {solicitudes.map((s,i) => (
-            <div className="sol-row" key={i}>
-              <div>
-                <div style={{fontSize:13,fontWeight:500,color:"var(--text)"}}>{s.prospecto}</div>
-              </div>
-              <div style={{fontSize:12,color:"var(--text2)"}}>{s.banco}</div>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:"var(--text)"}}>{s.monto}</div>
-              <div><span className={"visit-status status-"+estadoSol(s.estado)}>{s.estado}</span></div>
-              <div>
-                <div style={{fontSize:11,color:"var(--text3)",marginBottom:4}}>{s.avance}%</div>
-                <div className="sol-progress-bg">
-                  <div className="sol-progress-fill" style={{width:s.avance+"%", background: s.estado==="Rechazado"?"var(--red)":undefined}} />
-                </div>
-              </div>
-              <div style={{fontSize:11,color:"var(--text3)"}}>{s.fecha}</div>
-            </div>
-          ))}
+        <div>
+          <SolicitudesCredito prospectos2={[]} bancosList={bancos.map(b=>b.nombre)} />
         </div>
       )}
     </div>
@@ -3365,6 +3360,143 @@ function GaleriaModal({ propiedad, onClose }) {
         )}
         {uploading && <span className="gallery-uploading">Subiendo imágenes...</span>}
         <span style={{fontSize:11,color:"var(--text3)"}}>{fotos.length} foto{fotos.length!==1?"s":""}</span>
+      </div>
+    </div>
+  );
+}
+
+
+// ── SOLICITUDES CRÉDITO ──────────────────────────────────
+function SolicitudesCredito({ bancosList }) {
+  const [solicitudes, setSolicitudes] = useState([]);
+  const [prospectos, setProspectos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ prospecto_id:"", banco:"", monto:"", estado:"Nuevo", avance:0, fecha: new Date().toISOString().slice(0,10), notas:"" });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [sols, pros] = await Promise.all([
+      supa.from("solicitudes_credito").select("*"),
+      supa.from("prospectos").select("*"),
+    ]);
+    setSolicitudes(Array.isArray(sols) ? sols : []);
+    setProspectos(Array.isArray(pros) ? pros : []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    if (!form.prospecto_id || !form.banco) return;
+    setSaving(true);
+    await supa.from("solicitudes_credito").insert(form);
+    setForm({ prospecto_id:"", banco:"", monto:"", estado:"Nuevo", avance:0, fecha: new Date().toISOString().slice(0,10), notas:"" });
+    setShowForm(false);
+    setSaving(false);
+    load();
+  };
+
+  const estadoSol = (e) => {
+    const map = { "Aprobado":"confirmed","Pre-aprobado":"confirmed","En revisión":"pending","Documentación":"pending","Rechazado":"lost","Desembolsado":"confirmed" };
+    return map[e] || "new";
+  };
+
+  const getNombrePros = (id) => prospectos.find(p=>p.id===id)?.nombre || "—";
+
+  return (
+    <div>
+      {showForm && (
+        <div className="panel" style={{marginBottom:20}}>
+          <div className="panel-header">
+            <div className="panel-title">+ Nueva Solicitud de Crédito</div>
+            <span className="panel-action" onClick={()=>setShowForm(false)}>✕ Cerrar</span>
+          </div>
+          <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+            <div>
+              <div className="sim-label">Prospecto *</div>
+              <select className="sim-select" value={form.prospecto_id} onChange={e=>setForm({...form,prospecto_id:e.target.value})}>
+                <option value="">Seleccionar...</option>
+                {prospectos.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="sim-label">Banco *</div>
+              <select className="sim-select" value={form.banco} onChange={e=>setForm({...form,banco:e.target.value})}>
+                <option value="">Seleccionar...</option>
+                {["AV Villas","BBVA Colombia","Caja Social","Banco de Bogotá","Credifamilia","Banco W","Occidente","Hipocredit","Bancolombia"].map(b=><option key={b}>{b}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="sim-label">Monto crédito (COP)</div>
+              <input className="sim-input" placeholder="320000000" value={form.monto} onChange={e=>setForm({...form,monto:e.target.value})} />
+            </div>
+            <div>
+              <div className="sim-label">Estado</div>
+              <select className="sim-select" value={form.estado} onChange={e=>setForm({...form,estado:e.target.value})}>
+                {["Nuevo","Documentación","En revisión","Pre-aprobado","Aprobado","Desembolsado","Rechazado"].map(s=><option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="sim-label">% Avance</div>
+              <input className="sim-input" type="number" min="0" max="100" value={form.avance} onChange={e=>setForm({...form,avance:parseInt(e.target.value)||0})} />
+            </div>
+            <div>
+              <div className="sim-label">Fecha solicitud</div>
+              <input className="sim-input" type="date" value={form.fecha} onChange={e=>setForm({...form,fecha:e.target.value})} />
+            </div>
+            <div style={{gridColumn:"span 2"}}>
+              <div className="sim-label">Notas</div>
+              <input className="sim-input" placeholder="Observaciones..." value={form.notas} onChange={e=>setForm({...form,notas:e.target.value})} />
+            </div>
+            <div style={{display:"flex",alignItems:"flex-end"}}>
+              <button className="btn btn-gold" style={{width:"100%",justifyContent:"center"}} onClick={save} disabled={saving}>
+                {saving?"Guardando...":"💾 Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12,gap:8}}>
+        <button className="btn btn-ghost" onClick={load}>↻ Actualizar</button>
+        <button className="btn btn-gold" onClick={()=>setShowForm(!showForm)}>+ Nueva solicitud</button>
+      </div>
+
+      <div className="solicitud-table">
+        <div className="sol-head">
+          {["Prospecto","Banco","Monto crédito","Estado","Avance","Fecha",""].map(h=>(
+            <div key={h} className="th">{h}</div>
+          ))}
+        </div>
+        {loading ? (
+          <div style={{padding:"32px",textAlign:"center",color:"var(--text3)"}}>Cargando solicitudes...</div>
+        ) : solicitudes.length === 0 ? (
+          <div style={{padding:"32px",textAlign:"center",color:"var(--text3)"}}>No hay solicitudes aún. ¡Agrega la primera! 👆</div>
+        ) : solicitudes.map((s,i) => (
+          <div className="sol-row" key={i} style={{gridTemplateColumns:"2fr 1.5fr 1fr 1.2fr 1fr 1fr 0.5fr"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:500,color:"var(--text)"}}>{getNombrePros(s.prospecto_id)||s.prospecto||"—"}</div>
+            </div>
+            <div style={{fontSize:12,color:"var(--text2)"}}>{s.banco}</div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:"var(--text)"}}>
+              {s.monto ? "$ "+parseInt(s.monto).toLocaleString("es-CO") : "—"}
+            </div>
+            <div><span className={"visit-status status-"+estadoSol(s.estado)}>{s.estado}</span></div>
+            <div>
+              <div style={{fontSize:11,color:"var(--text3)",marginBottom:4}}>{s.avance}%</div>
+              <div className="sol-progress-bg">
+                <div className="sol-progress-fill" style={{width:s.avance+"%",background:s.estado==="Rechazado"?"var(--red)":undefined}} />
+              </div>
+            </div>
+            <div style={{fontSize:11,color:"var(--text3)"}}>{s.fecha ? new Date(s.fecha).toLocaleDateString("es-CO") : "—"}</div>
+            <div>
+              <button className="btn btn-ghost" style={{fontSize:10,padding:"3px 6px",color:"var(--red)"}}
+                onClick={async()=>{ if(window.confirm("¿Eliminar esta solicitud?")){ await supa.from("solicitudes_credito").delete({id:s.id}); load(); } }}>🗑</button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
