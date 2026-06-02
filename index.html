@@ -3502,6 +3502,229 @@ function SolicitudesCredito({ bancosList }) {
   );
 }
 
+
+// ── REPORTES ─────────────────────────────────────────────
+function Reportes() {
+  const [prospectos, setProspectos] = useState([]);
+  const [propiedades, setPropiedades] = useState([]);
+  const [visitas, setVisitas] = useState([]);
+  const [solicitudes, setSolicitudes] = useState([]);
+  const [actividades, setActividades] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [periodo, setPeriodo] = useState("mes");
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const [pros, props, vis, sols, acts] = await Promise.all([
+        supa.from("prospectos").select("*"),
+        supa.from("propiedades").select("*"),
+        supa.from("visitas").select("*"),
+        supa.from("solicitudes_credito").select("*"),
+        supa.from("actividades").select("*"),
+      ]);
+      setProspectos(Array.isArray(pros) ? pros : []);
+      setPropiedades(Array.isArray(props) ? props : []);
+      setVisitas(Array.isArray(vis) ? vis : []);
+      setSolicitudes(Array.isArray(sols) ? sols : []);
+      setActividades(Array.isArray(acts) ? acts : []);
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const now = new Date();
+  const mesActual = now.toLocaleDateString("es-CO", { month:"long", year:"numeric" });
+
+  // Métricas
+  const totalProspectos = prospectos.length;
+  const disponibles = propiedades.filter(p=>p.estado==="Disponible").length;
+  const vendidas = propiedades.filter(p=>p.estado==="Vendido").length;
+  const negociacion = prospectos.filter(p=>p.estado==="Negociación").length;
+  const cerrados = prospectos.filter(p=>p.estado==="Cerrado").length;
+  const tasaConversion = totalProspectos > 0 ? Math.round((cerrados/totalProspectos)*100) : 0;
+  const solicitudesAprobadas = solicitudes.filter(s=>s.estado==="Aprobado"||s.estado==="Desembolsado").length;
+
+  // Pipeline
+  const pipeline = [
+    { label:"Nuevo", count:prospectos.filter(p=>p.estado==="Nuevo").length, color:"var(--blue)" },
+    { label:"Contactado", count:prospectos.filter(p=>p.estado==="Contactado").length, color:"var(--gold)" },
+    { label:"Interesado", count:prospectos.filter(p=>p.estado==="Interesado").length, color:"var(--amber)" },
+    { label:"Visita agendada", count:prospectos.filter(p=>p.estado==="Visita agendada").length, color:"var(--green)" },
+    { label:"Negociación", count:prospectos.filter(p=>p.estado==="Negociación").length, color:"var(--green)" },
+    { label:"Cerrado", count:prospectos.filter(p=>p.estado==="Cerrado").length, color:"var(--text2)" },
+    { label:"Perdido", count:prospectos.filter(p=>p.estado==="Perdido").length, color:"var(--red)" },
+  ];
+  const maxPipe = Math.max(...pipeline.map(p=>p.count), 1);
+
+  // Fuentes
+  const fuentes = {};
+  prospectos.forEach(p => { if(p.fuente) fuentes[p.fuente] = (fuentes[p.fuente]||0)+1; });
+  const fuentesArr = Object.entries(fuentes).sort((a,b)=>b[1]-a[1]);
+
+  // Tipos de prospectos
+  const compradores = prospectos.filter(p=>p.tipo==="Comprador").length;
+  const vendedores = prospectos.filter(p=>p.tipo==="Vendedor").length;
+
+  // Actividades por tipo
+  const actTipos = {};
+  actividades.forEach(a => { if(a.tipo) actTipos[a.tipo] = (actTipos[a.tipo]||0)+1; });
+
+  // Inventario por tipo
+  const inventarioTipos = {};
+  propiedades.forEach(p => {
+    const tipo = (p.notas||"Otro").split(" ")[0];
+    inventarioTipos[tipo] = (inventarioTipos[tipo]||0)+1;
+  });
+
+  // Ingreso estimado
+  const ingresoEstimado = vendidas * 6000000;
+  const fmt = (n) => "$ " + n.toLocaleString("es-CO");
+
+  const Bar = ({pct, color}) => (
+    <div style={{flex:1,height:8,background:"var(--ink3)",borderRadius:4,overflow:"hidden"}}>
+      <div style={{height:"100%",width:`${pct}%`,background:color,borderRadius:4,transition:"width 0.6s ease"}}/>
+    </div>
+  );
+
+  if (loading) return <div style={{padding:60,textAlign:"center",color:"var(--text3)"}}>Cargando reportes...</div>;
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <div className="page-heading">Reportes <span>& Análisis</span></div>
+          <div className="page-sub" style={{textTransform:"capitalize"}}>{mesActual} · iProperties Latam</div>
+        </div>
+      </div>
+
+      {/* KPIs principales */}
+      <div className="kpi-row" style={{marginBottom:24}}>
+        {[
+          { label:"Total prospectos", val:totalProspectos, icon:"👥", color:"var(--gold)" },
+          { label:"Propiedades vendidas", val:vendidas, icon:"🏆", color:"var(--green)" },
+          { label:"Tasa de conversión", val:tasaConversion+"%", icon:"📈", color:"var(--blue)" },
+          { label:"Créditos aprobados", val:solicitudesAprobadas, icon:"🏦", color:"var(--amber)" },
+        ].map((k,i) => (
+          <div className="kpi-card" key={i} style={{"--accent-color":k.color}}>
+            <div className="kpi-icon">{k.icon}</div>
+            <div className="kpi-label">{k.label}</div>
+            <div className="kpi-value">{k.val}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}}>
+
+        {/* Pipeline de conversión */}
+        <div className="panel">
+          <div className="panel-header">
+            <div className="panel-title">📊 Pipeline de conversión</div>
+            <span className="panel-action">{totalProspectos} prospectos</span>
+          </div>
+          <div style={{padding:"16px 20px",display:"flex",flexDirection:"column",gap:10}}>
+            {pipeline.map((p,i) => (
+              <div key={i} style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{fontSize:11,color:"var(--text2)",width:120,flexShrink:0}}>{p.label}</div>
+                <Bar pct={maxPipe>0?(p.count/maxPipe)*100:0} color={p.color} />
+                <div style={{fontSize:12,color:p.color,fontWeight:600,minWidth:24,textAlign:"right"}}>{p.count}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Fuentes de captación */}
+        <div className="panel">
+          <div className="panel-header">
+            <div className="panel-title">📱 Fuentes de captación</div>
+            <span className="panel-action">{fuentesArr.length} fuentes</span>
+          </div>
+          <div style={{padding:"16px 20px",display:"flex",flexDirection:"column",gap:10}}>
+            {fuentesArr.length === 0 ? (
+              <div style={{textAlign:"center",color:"var(--text3)",padding:20,fontSize:12}}>Sin datos de fuentes aún</div>
+            ) : fuentesArr.map(([fuente, count],i) => (
+              <div key={i} style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{fontSize:11,color:"var(--text2)",width:120,flexShrink:0}}>{fuente}</div>
+                <Bar pct={(count/totalProspectos)*100} color="var(--gold)" />
+                <div style={{fontSize:12,color:"var(--gold)",fontWeight:600,minWidth:24,textAlign:"right"}}>{count}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Inventario */}
+        <div className="panel">
+          <div className="panel-header">
+            <div className="panel-title">🏠 Estado del inventario</div>
+            <span className="panel-action">{propiedades.length} propiedades</span>
+          </div>
+          <div style={{padding:"16px 20px"}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
+              {[
+                { label:"Disponibles", val:disponibles, color:"var(--green)", bg:"var(--green-dim)" },
+                { label:"Vendidas", val:vendidas, color:"var(--red)", bg:"var(--red-dim)" },
+                { label:"Reservadas", val:propiedades.filter(p=>p.estado==="Reservado").length, color:"var(--amber)", bg:"var(--amber-dim)" },
+              ].map((item,i)=>(
+                <div key={i} style={{background:item.bg,borderRadius:8,padding:"14px",textAlign:"center"}}>
+                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,color:item.color,fontWeight:300}}>{item.val}</div>
+                  <div style={{fontSize:10,color:"var(--text3)",marginTop:2,textTransform:"uppercase",letterSpacing:"0.1em"}}>{item.label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{padding:"10px 0",borderTop:"1px solid var(--border)",display:"flex",justifyContent:"space-between",fontSize:12}}>
+              <span style={{color:"var(--text3)"}}>Ingreso estimado (cierres)</span>
+              <span style={{color:"var(--gold)",fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:600}}>{fmt(ingresoEstimado)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Actividades */}
+        <div className="panel">
+          <div className="panel-header">
+            <div className="panel-title">📋 Actividades registradas</div>
+            <span className="panel-action">{actividades.length} total</span>
+          </div>
+          <div style={{padding:"16px 20px",display:"flex",flexDirection:"column",gap:10}}>
+            {Object.keys(actTipos).length === 0 ? (
+              <div style={{textAlign:"center",color:"var(--text3)",padding:20,fontSize:12}}>Sin actividades registradas aún</div>
+            ) : Object.entries(actTipos).sort((a,b)=>b[1]-a[1]).map(([tipo, count],i) => {
+              const icons = { Llamada:"📞", Visita:"🏠", Email:"📧", WhatsApp:"💬", Nota:"📝" };
+              return (
+                <div key={i} style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{fontSize:11,color:"var(--text2)",width:120,flexShrink:0}}>{icons[tipo]||"⭐"} {tipo}</div>
+                  <Bar pct={(count/actividades.length)*100} color="var(--blue)" />
+                  <div style={{fontSize:12,color:"var(--blue)",fontWeight:600,minWidth:24,textAlign:"right"}}>{count}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Solicitudes de crédito */}
+      <div className="panel">
+        <div className="panel-header">
+          <div className="panel-title">🏦 Solicitudes de crédito</div>
+          <span className="panel-action">{solicitudes.length} solicitudes</span>
+        </div>
+        <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+          {[
+            { label:"Total", val:solicitudes.length, color:"var(--text)" },
+            { label:"En revisión", val:solicitudes.filter(s=>s.estado==="En revisión").length, color:"var(--amber)" },
+            { label:"Aprobadas", val:solicitudes.filter(s=>s.estado==="Aprobado"||s.estado==="Desembolsado").length, color:"var(--green)" },
+            { label:"Rechazadas", val:solicitudes.filter(s=>s.estado==="Rechazado").length, color:"var(--red)" },
+          ].map((item,i)=>(
+            <div key={i} style={{background:"var(--ink3)",borderRadius:8,padding:"16px",textAlign:"center",border:"1px solid var(--border)"}}>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:32,color:item.color,fontWeight:300}}>{item.val}</div>
+              <div style={{fontSize:10,color:"var(--text3)",marginTop:4,textTransform:"uppercase",letterSpacing:"0.1em"}}>{item.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── APP ───────────────────────────────────────────────────
 const navItems = [
   { icon:"⬛", label:"Dashboard", section:"general" },
@@ -3551,12 +3774,7 @@ function CRM() {
       case "legal": return <AsesoriaLegal />;
       case "creditos": return <CreditosHipotecarios />;
       case "metas": return <Metas />;
-      case "reportes": return (
-        <div style={{padding:"40px 0",textAlign:"center"}}>
-          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:32,color:"var(--text)",marginBottom:8}}>Reportes <span style={{color:"var(--gold)",fontStyle:"italic"}}>& Análisis</span></div>
-          <div style={{color:"var(--text3)",fontSize:13}}>Módulo en desarrollo · Próximamente disponible</div>
-        </div>
-      );
+      case "reportes": return <Reportes />;
       default: return null;
     }
   };
