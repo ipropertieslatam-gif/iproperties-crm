@@ -2426,64 +2426,124 @@ function Seguimiento() {
 
 // ── ASESORÍA LEGAL ──────────────────────────────────────
 function AsesoriaLegal() {
-  const [legalTab, setLegalTab] = useState("checklist");
+  const [legalTab, setLegalTab] = useState("expedientes");
+  const [expedientes, setExpedientes] = useState([]);
+  const [prospectos, setProspectos] = useState([]);
+  const [propiedades, setPropiedades] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [selectedExp, setSelectedExp] = useState(null);
+  const [checklist, setChecklist] = useState([]);
+  const [alertaSending, setAlertaSending] = useState(false);
+  const [form, setForm] = useState({ prospecto_id:"", propiedad_id:"", tipo:"Compraventa", etapa:"Promesa", fecha_escritura:"", notas:"" });
+
+  // IA Chat
   const [messages, setMessages] = useState([
-    { role:"assistant", text:"Hola, soy tu asistente legal especializado en inmuebles. Puedo ayudarte con contratos de compraventa, arrendamiento, saneamiento de títulos, requisitos notariales y más. ¿En qué te puedo orientar hoy?" }
+    { role:"assistant", text:"Hola Roberth, soy tu asistente legal. Puedo ayudarte con contratos de compraventa, saneamiento de títulos, requisitos notariales y más. ¿En qué te puedo orientar?" }
   ]);
   const [inputVal, setInputVal] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loadingAI, setLoadingAI] = useState(false);
 
-  const [checkCompra, setCheckCompra] = useState([
-    { label:"Escritura pública o título de propiedad", checked:true, req:"Obligatorio" },
-    { label:"Certificado de libertad y gravamen", checked:true, req:"Obligatorio" },
-    { label:"Predial al corriente de pago", checked:false, req:"Obligatorio" },
-    { label:"Planos arquitectónicos autorizados", checked:false, req:"Obligatorio" },
-    { label:"Boleta de agua sin adeudos", checked:true, req:"Obligatorio" },
-    { label:"Identificación oficial del vendedor", checked:true, req:"Obligatorio" },
-    { label:"RFC del vendedor y comprador", checked:false, req:"Obligatorio" },
-    { label:"Avalúo comercial vigente", checked:false, req:"Recomendado" },
-    { label:"Contrato de promesa de compraventa", checked:false, req:"Recomendado" },
-  ]);
+  const checklistItems = {
+    "Promesa": [
+      { item:"Cédulas comprador y vendedor", etapa:"Promesa" },
+      { item:"Certificado de libertad y tradición", etapa:"Promesa" },
+      { item:"Paz y salvo predial", etapa:"Promesa" },
+      { item:"Paz y salvo administración", etapa:"Promesa" },
+      { item:"Minuta de promesa firmada", etapa:"Promesa" },
+      { item:"Arras pagadas y recibidas", etapa:"Promesa" },
+    ],
+    "Escritura": [
+      { item:"Promesa de compraventa", etapa:"Escritura" },
+      { item:"Avalúo catastral", etapa:"Escritura" },
+      { item:"Paz y salvo impuesto de renta", etapa:"Escritura" },
+      { item:"Paz y salvo servicios públicos", etapa:"Escritura" },
+      { item:"Poder notarial si aplica", etapa:"Escritura" },
+      { item:"Pago derechos notariales", etapa:"Escritura" },
+    ],
+    "Registro": [
+      { item:"Escritura firmada y notariada", etapa:"Registro" },
+      { item:"Liquidación derechos notariales", etapa:"Registro" },
+      { item:"Registro en Instrumentos Públicos", etapa:"Registro" },
+      { item:"Actualización catastral", etapa:"Registro" },
+      { item:"Entrega de llaves", etapa:"Registro" },
+    ]
+  };
 
-  const [checkArrendamiento, setCheckArrendamiento] = useState([
-    { label:"Contrato de arrendamiento firmado", checked:true, req:"Obligatorio" },
-    { label:"Identificación oficial del arrendatario", checked:true, req:"Obligatorio" },
-    { label:"Comprobante de ingresos (3 meses)", checked:false, req:"Obligatorio" },
-    { label:"Fiador o aval con propiedad", checked:false, req:"Obligatorio" },
-    { label:"Depósito en garantía (1-2 meses)", checked:true, req:"Obligatorio" },
-    { label:"Inventario firmado del inmueble", checked:false, req:"Recomendado" },
-    { label:"Póliza jurídica de arrendamiento", checked:false, req:"Recomendado" },
-  ]);
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [exp, pros, props] = await Promise.all([
+      supa.from("expedientes_legales").select("*"),
+      supa.from("prospectos").select("*"),
+      supa.from("propiedades").select("*"),
+    ]);
+    setExpedientes(Array.isArray(exp) ? exp : []);
+    setProspectos(Array.isArray(pros) ? pros : []);
+    setPropiedades(Array.isArray(props) ? props : []);
+    setLoading(false);
+  }, []);
 
-  const [saneamientos, setSaneamientos] = useState([
-    { inmueble:"Torre Ámbar 4B", tipo:"Compraventa", avance:85, pendiente:"Avalúo comercial", estado:"En proceso" },
-    { inmueble:"Residencial Bosque 12A", tipo:"Saneamiento de título", avance:40, pendiente:"Regularización de superficie", estado:"Alerta" },
-    { inmueble:"Urban Loft 203", tipo:"Arrendamiento", avance:100, pendiente:"—", estado:"Completo" },
-    { inmueble:"Sky Residences 902", tipo:"Hipoteca activa", avance:60, pendiente:"Cancelación de gravamen", estado:"En proceso" },
-  ]);
+  useEffect(() => { load(); }, [load]);
 
-  const documentos = [
-    { icon:"📄", bg:"var(--blue-dim)", nombre:"Contrato Promesa de Compraventa", meta:"Torre Ámbar 4B · Carlos Mendoza", estado:"Borrador", estCls:"status-pending" },
-    { icon:"📋", bg:"var(--green-dim)", nombre:"Contrato de Arrendamiento", meta:"Urban Loft 203 · Ana Torres", estado:"Firmado", estCls:"status-confirmed" },
-    { icon:"⚖️", bg:"var(--gold-dim)", nombre:"Poder Notarial", meta:"Roberto Fuentes · Vendedor", estado:"En revisión", estCls:"status-pending" },
-    { icon:"🏛️", bg:"var(--amber-dim)", nombre:"Escritura Pública", meta:"Mirador Del Valle 7C", estado:"Completo", estCls:"status-confirmed" },
-    { icon:"📑", bg:"var(--red-dim)", nombre:"Cancelación de Hipoteca", meta:"Sky Residences 902", estado:"Pendiente", estCls:"status-new" },
-    { icon:"📃", bg:"var(--blue-dim)", nombre:"Cesión de Derechos", meta:"Patio Central 15 · En trámite", estado:"Borrador", estCls:"status-pending" },
-  ];
+  const loadChecklist = useCallback(async (expId) => {
+    const data = await supa.from("checklist_legal").select("*");
+    const arr = Array.isArray(data) ? data.filter(c=>c.expediente_id===expId) : [];
+    setChecklist(arr);
+  }, []);
 
-  const quickQuestions = [
-    "¿Qué documentos necesito para compraventa?",
-    "¿Cómo cancelo una hipoteca?",
-    "¿Qué es el certificado de gravamen?",
-    "¿Cuánto tarda escriturar?",
-  ];
+  useEffect(() => { if (selectedExp) loadChecklist(selectedExp.id); }, [selectedExp, loadChecklist]);
 
-  const sendMessage = async (text) => {
-    const msg = text || inputVal.trim();
+  const crearExpediente = async () => {
+    if (!form.prospecto_id || !form.propiedad_id) return;
+    setSaving(true);
+    const result = await supa.from("expedientes_legales").insert({
+      ...form,
+      estado: "Activo",
+      fecha_escritura: form.fecha_escritura || null,
+    });
+    // Crear checklist automático
+    if (Array.isArray(result) && result[0]) {
+      const expId = result[0].id;
+      const items = [...checklistItems["Promesa"], ...checklistItems["Escritura"], ...checklistItems["Registro"]];
+      for (const item of items) {
+        await supa.from("checklist_legal").insert({ expediente_id: expId, ...item });
+      }
+    }
+    setShowForm(false);
+    setSaving(false);
+    setForm({ prospecto_id:"", propiedad_id:"", tipo:"Compraventa", etapa:"Promesa", fecha_escritura:"", notas:"" });
+    load();
+  };
+
+  const toggleCheck = async (item) => {
+    await supa.from("checklist_legal").update({ completado: !item.completado }, { id: item.id });
+    loadChecklist(selectedExp.id);
+  };
+
+  const enviarAlerta = async (exp) => {
+    setAlertaSending(true);
+    // Marcar como alerta enviada
+    await supa.from("expedientes_legales").update({ alerta_enviada: true }, { id: exp.id });
+    const prospecto = prospectos.find(p=>p.id===exp.prospecto_id);
+    const propiedad = propiedades.find(p=>p.id===exp.propiedad_id);
+    alert(`✅ Alerta enviada a Roberth Beltrán
+
+📋 Expediente: ${propiedad?.nombre||"Propiedad"}
+👤 Cliente: ${prospecto?.nombre||"Cliente"}
+📌 Etapa: ${exp.etapa}
+
+Roberth debe revisar el CRM para ver los detalles.`);
+    setAlertaSending(false);
+    load();
+  };
+
+  const sendMessage = async () => {
+    const msg = inputVal.trim();
     if (!msg) return;
     setInputVal("");
     setMessages(prev => [...prev, { role:"user", text: msg }]);
-    setLoading(true);
+    setLoadingAI(true);
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -2491,7 +2551,7 @@ function AsesoriaLegal() {
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
-          system: "Eres un asistente legal especializado en bienes raíces en México. Respondes preguntas sobre contratos de compraventa, arrendamiento, saneamiento de títulos, trámites notariales, impuestos inmobiliarios (ISR, IVA), hipotecas, cesión de derechos y regularización de inmuebles. Tus respuestas son claras, concisas, prácticas y en español. Máximo 4 párrafos cortos. Usa viñetas cuando sea útil.",
+          system: "Eres un asistente legal especializado en bienes raíces en Colombia. Ayudas con contratos de compraventa, arrendamiento, saneamiento de títulos, trámites notariales, hipotecas y registro de inmuebles. Respuestas claras, concisas y en español. Máximo 4 párrafos.",
           messages: [{ role:"user", content: msg }]
         })
       });
@@ -2501,31 +2561,85 @@ function AsesoriaLegal() {
     } catch(e) {
       setMessages(prev => [...prev, { role:"assistant", text:"Error al conectar. Intenta de nuevo." }]);
     }
-    setLoading(false);
+    setLoadingAI(false);
   };
 
-  const toggleCheck = (arr, setArr, idx) => {
-    const copy = [...arr];
-    copy[idx] = { ...copy[idx], checked: !copy[idx].checked };
-    setArr(copy);
+  const etapaColor = (e) => e==="Promesa"?"var(--amber)":e==="Escritura"?"var(--blue)":e==="Registro"?"var(--green)":"var(--text3)";
+  const estadoColor = (e) => e==="Activo"?"var(--green)":e==="Cerrado"?"var(--text3)":"var(--red)";
+  const getNombre = (arr, id) => arr.find(x=>x.id===id)?.nombre || "—";
+  const checkPct = (expId) => {
+    const items = checklist.filter(c=>c.expediente_id===expId);
+    if (!items.length) return 0;
+    return Math.round((items.filter(c=>c.completado).length/items.length)*100);
   };
-
-  const stateColor = (s) => s === "Completo" ? "var(--green)" : s === "Alerta" ? "var(--red)" : "var(--amber)";
 
   return (
     <div>
       <div className="page-header">
         <div>
           <div className="page-heading">Asesoría <span>Legal</span></div>
-          <div className="page-sub">Contratos · Saneamiento · Checklist · Consulta con IA</div>
+          <div className="page-sub">{expedientes.length} expedientes · conectado a Supabase ●</div>
         </div>
-        <button className="btn btn-gold">+ Nuevo documento</button>
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn btn-ghost" onClick={load}>↻ Actualizar</button>
+          <button className="btn btn-gold" onClick={()=>setShowForm(!showForm)}>+ Nuevo expediente</button>
+        </div>
       </div>
+
+      {showForm && (
+        <div className="panel" style={{marginBottom:20}}>
+          <div className="panel-header">
+            <div className="panel-title">📋 Nuevo Expediente Legal</div>
+            <span className="panel-action" onClick={()=>setShowForm(false)}>✕ Cerrar</span>
+          </div>
+          <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+            <div>
+              <div className="sim-label">Prospecto / Cliente *</div>
+              <select className="sim-select" value={form.prospecto_id} onChange={e=>setForm({...form,prospecto_id:e.target.value})}>
+                <option value="">Seleccionar...</option>
+                {prospectos.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="sim-label">Propiedad *</div>
+              <select className="sim-select" value={form.propiedad_id} onChange={e=>setForm({...form,propiedad_id:e.target.value})}>
+                <option value="">Seleccionar...</option>
+                {propiedades.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="sim-label">Tipo de operación</div>
+              <select className="sim-select" value={form.tipo} onChange={e=>setForm({...form,tipo:e.target.value})}>
+                {["Compraventa","Arrendamiento","Saneamiento","Cesión de derechos","Hipoteca"].map(t=><option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="sim-label">Etapa inicial</div>
+              <select className="sim-select" value={form.etapa} onChange={e=>setForm({...form,etapa:e.target.value})}>
+                {["Promesa","Escritura","Registro"].map(t=><option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="sim-label">Fecha escritura (si aplica)</div>
+              <input className="sim-input" type="date" value={form.fecha_escritura} onChange={e=>setForm({...form,fecha_escritura:e.target.value})} />
+            </div>
+            <div>
+              <div className="sim-label">Notas</div>
+              <input className="sim-input" placeholder="Observaciones..." value={form.notas} onChange={e=>setForm({...form,notas:e.target.value})} />
+            </div>
+            <div style={{display:"flex",alignItems:"flex-end"}}>
+              <button className="btn btn-gold" style={{width:"100%",justifyContent:"center"}} onClick={crearExpediente} disabled={saving}>
+                {saving?"Creando...":"💾 Crear expediente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="legal-tabs">
         {[
-          { key:"checklist", icon:"✅", label:"Checklist Legal" },
-          { key:"documentos", icon:"📁", label:"Documentos" },
+          { key:"expedientes", icon:"📁", label:"Expedientes" },
+          { key:"checklist", icon:"✅", label:"Checklist" },
           { key:"saneamiento", icon:"🏛️", label:"Saneamiento" },
           { key:"ia", icon:"⚖️", label:"Consulta IA" },
         ].map(t => (
@@ -2535,72 +2649,120 @@ function AsesoriaLegal() {
         ))}
       </div>
 
+      {legalTab === "expedientes" && (
+        <div>
+          {loading ? (
+            <div style={{textAlign:"center",padding:40,color:"var(--text3)"}}>Cargando expedientes...</div>
+          ) : expedientes.length === 0 ? (
+            <div style={{textAlign:"center",padding:40,color:"var(--text3)"}}>No hay expedientes aún. Crea el primero. 👆</div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {expedientes.map((exp,i) => (
+                <div key={exp.id} className="panel" style={{cursor:"pointer",borderColor:selectedExp?.id===exp.id?"var(--gold)":"var(--border)"}}
+                  onClick={()=>{ setSelectedExp(exp); setLegalTab("checklist"); }}>
+                  <div style={{padding:"14px 20px",display:"grid",gridTemplateColumns:"2fr 1.5fr 1fr 1fr 1fr 0.8fr",alignItems:"center",gap:12}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>{getNombre(propiedades, exp.propiedad_id)}</div>
+                      <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{getNombre(prospectos, exp.prospecto_id)}</div>
+                    </div>
+                    <div style={{fontSize:12,color:"var(--text2)"}}>{exp.tipo}</div>
+                    <div>
+                      <span style={{fontSize:11,padding:"3px 8px",borderRadius:20,background:"var(--gold-dim)",color:etapaColor(exp.etapa),fontWeight:500}}>{exp.etapa}</span>
+                    </div>
+                    <div>
+                      <span style={{fontSize:11,padding:"3px 8px",borderRadius:20,background:"var(--green-dim)",color:estadoColor(exp.estado),fontWeight:500}}>{exp.estado}</span>
+                    </div>
+                    <div style={{fontSize:11,color:"var(--text3)"}}>
+                      {exp.fecha_escritura ? new Date(exp.fecha_escritura).toLocaleDateString("es-CO") : "Sin fecha"}
+                    </div>
+                    <div style={{display:"flex",gap:6}}>
+                      <button className="btn btn-ghost" style={{fontSize:10,padding:"4px 8px",color:"var(--amber)"}}
+                        onClick={e=>{ e.stopPropagation(); enviarAlerta(exp); }} disabled={alertaSending}>
+                        {exp.alerta_enviada?"✅ Alertado":"🔔 Alertar"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {legalTab === "checklist" && (
         <div className="legal-grid">
           <div className="panel">
             <div className="panel-header">
-              <div className="panel-title">Compraventa</div>
-              <span className="panel-action">{checkCompra.filter(c=>c.checked).length}/{checkCompra.length} completos</span>
-            </div>
-            <div className="checklist-section">
-              {["Obligatorio","Recomendado"].map(grupo => (
-                <div className="checklist-group" key={grupo}>
-                  <div className="checklist-group-title">{grupo}</div>
-                  {checkCompra.filter(c=>c.req===grupo).map((c,i) => {
-                    const globalIdx = checkCompra.indexOf(c);
-                    return (
-                      <div className="check-row" key={i} onClick={()=>toggleCheck(checkCompra,setCheckCompra,globalIdx)}>
-                        <div className={"check-box" + (c.checked?" checked":"")}>{c.checked?"✓":""}</div>
-                        <span className={"check-label" + (c.checked?" checked":"")}>{c.label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">
-              <div className="panel-title">Arrendamiento</div>
-              <span className="panel-action">{checkArrendamiento.filter(c=>c.checked).length}/{checkArrendamiento.length} completos</span>
-            </div>
-            <div className="checklist-section">
-              {["Obligatorio","Recomendado"].map(grupo => (
-                <div className="checklist-group" key={grupo}>
-                  <div className="checklist-group-title">{grupo}</div>
-                  {checkArrendamiento.filter(c=>c.req===grupo).map((c,i) => {
-                    const globalIdx = checkArrendamiento.indexOf(c);
-                    return (
-                      <div className="check-row" key={i} onClick={()=>toggleCheck(checkArrendamiento,setCheckArrendamiento,globalIdx)}>
-                        <div className={"check-box" + (c.checked?" checked":"")}>{c.checked?"✓":""}</div>
-                        <span className={"check-label" + (c.checked?" checked":"")}>{c.label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {legalTab === "documentos" && (
-        <div className="panel legal-grid-full">
-          <div className="panel-header">
-            <div className="panel-title">Documentos y Contratos</div>
-            <span className="panel-action">{documentos.length} documentos</span>
-          </div>
-          {documentos.map((d,i) => (
-            <div className="doc-item" key={i}>
-              <div className="doc-icon" style={{background:d.bg}}>{d.icon}</div>
-              <div className="doc-info">
-                <div className="doc-name">{d.nombre}</div>
-                <div className="doc-meta">{d.meta}</div>
+              <div className="panel-title">
+                {selectedExp ? `📋 ${getNombre(propiedades, selectedExp.propiedad_id)}` : "Selecciona un expediente"}
               </div>
-              <span className={"doc-status visit-status " + d.estCls}>{d.estado}</span>
+              <span className="panel-action" onClick={()=>setLegalTab("expedientes")}>← Ver expedientes</span>
             </div>
-          ))}
+            {!selectedExp ? (
+              <div style={{padding:"32px 20px",textAlign:"center",color:"var(--text3)"}}>
+                Ve a Expedientes y selecciona uno para ver su checklist.
+              </div>
+            ) : (
+              <div className="checklist-section">
+                {["Promesa","Escritura","Registro"].map(etapa => {
+                  const items = checklist.filter(c=>c.etapa===etapa);
+                  const done = items.filter(c=>c.completado).length;
+                  return (
+                    <div className="checklist-group" key={etapa}>
+                      <div className="checklist-group-title" style={{display:"flex",justifyContent:"space-between"}}>
+                        <span>{etapa}</span>
+                        <span style={{color:"var(--text3)"}}>{done}/{items.length}</span>
+                      </div>
+                      {items.map((item,i) => (
+                        <div className="check-row" key={i} onClick={()=>toggleCheck(item)}>
+                          <div className={"check-box"+(item.completado?" checked":"")}>{item.completado?"✓":""}</div>
+                          <span className={"check-label"+(item.completado?" checked":"")}>{item.item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            {selectedExp && (
+              <div className="panel">
+                <div className="panel-header"><div className="panel-title">Ficha del expediente</div></div>
+                <div className="panel-body">
+                  {[
+                    ["Propiedad", getNombre(propiedades, selectedExp.propiedad_id)],
+                    ["Cliente", getNombre(prospectos, selectedExp.prospecto_id)],
+                    ["Tipo", selectedExp.tipo],
+                    ["Etapa", selectedExp.etapa],
+                    ["Estado", selectedExp.estado],
+                    ["Fecha escritura", selectedExp.fecha_escritura ? new Date(selectedExp.fecha_escritura).toLocaleDateString("es-CO") : "Por definir"],
+                    ["Notas", selectedExp.notas || "—"],
+                  ].map(([k,v],i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid var(--border)",fontSize:12}}>
+                      <span style={{color:"var(--text3)"}}>{k}</span>
+                      <span style={{color:"var(--text)",fontWeight:500,textAlign:"right",maxWidth:180}}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{padding:"12px 20px",display:"flex",gap:8}}>
+                  <button className="btn btn-ghost" style={{flex:1,justifyContent:"center",fontSize:12}}
+                    onClick={()=>enviarAlerta(selectedExp)}>
+                    🔔 Enviar alerta a Roberth
+                  </button>
+                  <select className="sim-select" style={{flex:1,fontSize:12}} value={selectedExp.etapa}
+                    onChange={async e=>{
+                      await supa.from("expedientes_legales").update({etapa:e.target.value},{id:selectedExp.id});
+                      load();
+                      setSelectedExp({...selectedExp,etapa:e.target.value});
+                    }}>
+                    {["Promesa","Escritura","Registro"].map(t=><option key={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -2609,36 +2771,28 @@ function AsesoriaLegal() {
           <div className="panel legal-grid-full" style={{marginBottom:16}}>
             <div className="panel-header">
               <div className="panel-title">Saneamiento de Inmuebles</div>
-              <span className="panel-action">{saneamientos.length} propiedades</span>
+              <span className="panel-action">{propiedades.length} propiedades</span>
             </div>
             <div style={{padding:"16px 20px"}}>
-              {saneamientos.map((s,i) => (
+              {propiedades.map((p,i) => (
                 <div className="saneamiento-card" key={i}>
                   <div className="san-header">
                     <div>
-                      <div className="san-title">{s.inmueble}</div>
-                      <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{s.tipo}</div>
+                      <div className="san-title">{p.nombre}</div>
+                      <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{p.ubicacion}</div>
                     </div>
-                    <span className="visit-status" style={{background: s.estado==="Completo"?"var(--green-dim)":s.estado==="Alerta"?"var(--red-dim)":"var(--amber-dim)", color:stateColor(s.estado)}}>
-                      {s.estado}
+                    <span className="visit-status" style={{background:p.estado==="Disponible"?"var(--green-dim)":p.estado==="Vendido"?"var(--red-dim)":"var(--amber-dim)",
+                      color:p.estado==="Disponible"?"var(--green)":p.estado==="Vendido"?"var(--red)":"var(--amber)"}}>
+                      {p.estado}
                     </span>
                   </div>
-                  <div className="san-progress-bg">
-                    <div className="san-progress-fill" style={{width:s.avance+"%", background: s.estado==="Alerta"?"linear-gradient(90deg,var(--red),#f08080)":undefined}} />
-                  </div>
-                  <div className="san-meta">
-                    <span style={{color:"var(--text2)"}}>{s.avance}% avance</span>
-                    {s.pendiente !== "—" && <span style={{marginLeft:12}}>⚠ Pendiente: {s.pendiente}</span>}
-                  </div>
+                  <div style={{fontSize:11,color:"var(--text3)",marginTop:6}}>📍 {p.ubicacion} {p.notas ? `· ${p.notas}` : ""}</div>
                 </div>
               ))}
             </div>
           </div>
-
           <div className="panel">
-            <div className="panel-header">
-              <div className="panel-title">¿Qué es el saneamiento?</div>
-            </div>
+            <div className="panel-header"><div className="panel-title">¿Qué es el saneamiento?</div></div>
             <div className="panel-body" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               {[
                 { icon:"📜", title:"Regularización de título", desc:"Corrección de superficie, linderos o titulares en el Registro Público." },
@@ -2664,40 +2818,31 @@ function AsesoriaLegal() {
             <span className="panel-action" style={{color:"var(--green)"}}>● Activo</span>
           </div>
           <div className="quick-questions">
-            {quickQuestions.map((q,i) => (
-              <div key={i} className="quick-q" onClick={()=>sendMessage(q)}>{q}</div>
+            {["¿Qué documentos necesito para compraventa?","¿Cómo cancelo una hipoteca?","¿Qué es el certificado de gravamen?","¿Cuánto tarda escriturar?"].map((q,i) => (
+              <div key={i} className="quick-q" onClick={()=>{ setInputVal(q); }}>{q}</div>
             ))}
           </div>
           <div className="ai-chat-area">
             <div className="ai-messages">
               {messages.map((m,i) => (
                 <div key={i} className={"ai-msg " + m.role}>
-                  <div className="ai-avatar" style={{background: m.role==="assistant"?"var(--gold-dim)":"var(--blue-dim)"}}>
-                    {m.role==="assistant" ? "⚖️" : "👤"}
+                  <div className="ai-avatar" style={{background:m.role==="assistant"?"var(--gold-dim)":"var(--blue-dim)"}}>
+                    {m.role==="assistant"?"⚖️":"👤"}
                   </div>
                   <div className="ai-bubble" style={{whiteSpace:"pre-wrap"}}>{m.text}</div>
                 </div>
               ))}
-              {loading && (
+              {loadingAI && (
                 <div className="ai-msg assistant">
                   <div className="ai-avatar" style={{background:"var(--gold-dim)"}}>⚖️</div>
-                  <div className="ai-bubble">
-                    <div className="ai-loading">
-                      <div className="ai-dot" /><div className="ai-dot" /><div className="ai-dot" />
-                    </div>
-                  </div>
+                  <div className="ai-bubble"><div className="ai-loading"><div className="ai-dot"/><div className="ai-dot"/><div className="ai-dot"/></div></div>
                 </div>
               )}
             </div>
             <div className="ai-input-row">
-              <input
-                className="ai-input"
-                placeholder="Escribe tu consulta legal..."
-                value={inputVal}
-                onChange={e=>setInputVal(e.target.value)}
-                onKeyDown={e=>e.key==="Enter"&&sendMessage()}
-              />
-              <button className="ai-send" onClick={()=>sendMessage()}>➤</button>
+              <input className="ai-input" placeholder="Escribe tu consulta legal..." value={inputVal}
+                onChange={e=>setInputVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMessage()} />
+              <button className="ai-send" onClick={sendMessage}>➤</button>
             </div>
           </div>
         </div>
@@ -2707,7 +2852,6 @@ function AsesoriaLegal() {
 }
 
 
-// ── CRÉDITOS HIPOTECARIOS ────────────────────────────────
 function CreditosHipotecarios() {
   const [tab, setTab] = useState("simulador");
   const [monto, setMonto] = useState("400000000");
