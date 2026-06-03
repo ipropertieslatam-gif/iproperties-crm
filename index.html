@@ -17,6 +17,21 @@ const { useState, useEffect, useCallback } = React;
 const SUPA_AUTH_URL = "https://xmkvlwkmyrdscdaaoxaf.supabase.co/auth/v1";
 const SUPA_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhta3Zsd2tteXJkc2NkYWFveGFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4MjY0OTIsImV4cCI6MjA5NTQwMjQ5Mn0.soxEw5_1vAPorKGOuIg0pgpOonSimw1a6Ypu66AYUvc";
 
+// Helper huella de usuario
+const getUsuario = () => {
+  try {
+    const s = localStorage.getItem("crm_session");
+    if (s) {
+      const data = JSON.parse(s);
+      const email = data?.user?.email || "";
+      if (email.includes("rbeltranmartinez")) return "Roberth Beltrán";
+      if (email.includes("ipropertieslatam")) return "Paula Rodriguez";
+      return email;
+    }
+  } catch(e) {}
+  return "Sistema";
+};
+
 const loginStyles = `
   .login-bg {
     min-height: 100vh;
@@ -1842,7 +1857,7 @@ function Propiedades() {
   const [editPropiedad, setEditPropiedad] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [editSaving, setEditSaving] = useState(false);
-  const [form, setForm] = useState({ nombre:"", ubicacion:"", precio:"", estado:"Disponible", m2:"", habitaciones:"", banos:"", notas:"" });
+  const [form, setForm] = useState({ nombre:"", ubicacion:"", precio:"", estado:"Disponible", m2:"", habitaciones:"", banos:"", tipo_inmueble:"Apartamento", notas:"" });
 
   const tabs = ["Todas","Disponibles","Vendidas"];
 
@@ -1996,6 +2011,7 @@ function Propiedades() {
                   {p.m2 && <span className="spec">⬛ {p.m2} m²</span>}
                   {p.habitaciones && <span className="spec">🛏 {p.habitaciones} hab.</span>}
                   {p.banos && <span className="spec">🚿 {p.banos} baños</span>}
+                  {p.tipo_inmueble && <span className="spec" style={{background:"var(--gold-dim)",color:"var(--gold)"}}>🏷️ {p.tipo_inmueble}</span>}
                   {p.notas && <span className="spec">📋 {p.notas}</span>}
                 </div>
                 <div className="prop-footer">
@@ -2297,7 +2313,7 @@ function Seguimiento() {
       tipo: form.tipo,
       descripcion: form.descripcion,
       fecha: form.fecha,
-      agente: "Paula Rodriguez"
+      agente: getUsuario()
     });
     setForm({ tipo:"Llamada", descripcion:"", fecha: new Date().toISOString().slice(0,16) });
     setShowForm(false);
@@ -2451,6 +2467,9 @@ function AsesoriaLegal() {
   const [selectedExp, setSelectedExp] = useState(null);
   const [checklist, setChecklist] = useState([]);
   const [alertaSending, setAlertaSending] = useState(false);
+  const [editExp, setEditExp] = useState(null);
+  const [editExpForm, setEditExpForm] = useState({});
+  const [editExpSaving, setEditExpSaving] = useState(false);
   const [form, setForm] = useState({ prospecto_id:"", propiedad_id:"", tipo:"Compraventa", etapa:"Promesa", fecha_escritura:"", notas:"" });
 
   // IA Chat
@@ -2579,6 +2598,18 @@ Roberth debe revisar el CRM para ver los detalles.`);
     setLoadingAI(false);
   };
 
+  const saveEditExp = async () => {
+    if (!editExp) return;
+    setEditExpSaving(true);
+    await supa.from("expedientes_legales").update({
+      ...editExpForm,
+      fecha_escritura: editExpForm.fecha_escritura || null,
+    }, { id: editExp.id });
+    setEditExp(null);
+    setEditExpSaving(false);
+    load();
+  };
+
   const etapaColor = (e) => e==="Promesa"?"var(--amber)":e==="Escritura"?"var(--blue)":e==="Registro"?"var(--green)":"var(--text3)";
   const estadoColor = (e) => e==="Activo"?"var(--green)":e==="Cerrado"?"var(--text3)":"var(--red)";
   const getNombre = (arr, id) => arr.find(x=>x.id===id)?.nombre || "—";
@@ -2690,11 +2721,16 @@ Roberth debe revisar el CRM para ver los detalles.`);
                     <div style={{fontSize:11,color:"var(--text3)"}}>
                       {exp.fecha_escritura ? new Date(exp.fecha_escritura).toLocaleDateString("es-CO") : "Sin fecha"}
                     </div>
-                    <div style={{display:"flex",gap:6}}>
-                      <button className="btn btn-ghost" style={{fontSize:10,padding:"4px 8px",color:"var(--amber)"}}
+                    <div style={{display:"flex",gap:4,flexDirection:"column"}}>
+                      <button className="btn btn-ghost" style={{fontSize:10,padding:"3px 6px",color:"var(--amber)"}}
                         onClick={e=>{ e.stopPropagation(); enviarAlerta(exp); }} disabled={alertaSending}>
                         {exp.alerta_enviada?"✅ Alertado":"🔔 Alertar"}
                       </button>
+                      <button className="btn btn-ghost" style={{fontSize:10,padding:"3px 6px"}}
+                        onClick={e=>{ e.stopPropagation(); setEditExp(exp); setEditExpForm({
+                          tipo:exp.tipo||"Compraventa", etapa:exp.etapa||"Promesa",
+                          estado:exp.estado||"Activo", fecha_escritura:exp.fecha_escritura?.slice(0,10)||"", notas:exp.notas||""
+                        }); }}>✏️ Editar</button>
                     </div>
                   </div>
                 </div>
@@ -2790,18 +2826,40 @@ Roberth debe revisar el CRM para ver los detalles.`);
             </div>
             <div style={{padding:"16px 20px"}}>
               {propiedades.map((p,i) => (
-                <div className="saneamiento-card" key={i}>
-                  <div className="san-header">
-                    <div>
-                      <div className="san-title">{p.nombre}</div>
-                      <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{p.ubicacion}</div>
+                <div key={i}>
+                  <div className="saneamiento-card" onClick={()=>{ const el=document.getElementById("san-"+p.id); el.style.display=el.style.display==="none"?"block":"none"; }}>
+                    <div className="san-header">
+                      <div>
+                        <div className="san-title">{p.nombre}</div>
+                        <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{p.ubicacion}</div>
+                      </div>
+                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                        <span className="visit-status" style={{background:p.estado==="Disponible"?"var(--green-dim)":p.estado==="Vendido"?"var(--red-dim)":"var(--amber-dim)",
+                          color:p.estado==="Disponible"?"var(--green)":p.estado==="Vendido"?"var(--red)":"var(--amber)"}}>
+                          {p.estado}
+                        </span>
+                        <span style={{fontSize:11,color:"var(--text3)"}}>📁 Ver carpeta ▼</span>
+                      </div>
                     </div>
-                    <span className="visit-status" style={{background:p.estado==="Disponible"?"var(--green-dim)":p.estado==="Vendido"?"var(--red-dim)":"var(--amber-dim)",
-                      color:p.estado==="Disponible"?"var(--green)":p.estado==="Vendido"?"var(--red)":"var(--amber)"}}>
-                      {p.estado}
-                    </span>
+                    <div style={{fontSize:11,color:"var(--text3)",marginTop:6}}>📍 {p.ubicacion} {p.tipo_inmueble ? `· ${p.tipo_inmueble}` : ""}</div>
                   </div>
-                  <div style={{fontSize:11,color:"var(--text3)",marginTop:6}}>📍 {p.ubicacion} {p.notas ? `· ${p.notas}` : ""}</div>
+                  <div id={"san-"+p.id} style={{display:"none",background:"var(--ink3)",border:"1px solid var(--border)",borderTop:"none",borderRadius:"0 0 8px 8px",padding:"16px 20px",marginBottom:8}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"var(--gold)",marginBottom:12}}>📁 Carpeta — {p.nombre}</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                      {["📜 Escritura/Título","🏛️ Cert. Libertad y Tradición","💰 Paz y salvo predial",
+                        "🚰 Paz y salvo servicios","🏢 Paz y salvo admin","📋 Planos autorizados",
+                        "🔑 Poderes notariales","📄 Promesa firmada","✅ Escritura final"].map((doc,j)=>(
+                        <div key={j} style={{background:"var(--ink2)",border:"1px solid var(--border)",borderRadius:6,padding:"10px 12px",fontSize:11,color:"var(--text2)",cursor:"pointer",transition:"border-color 0.15s"}}
+                          onMouseOver={e=>e.currentTarget.style.borderColor="var(--gold)"}
+                          onMouseOut={e=>e.currentTarget.style.borderColor="var(--border)"}>
+                          {doc}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{marginTop:12,fontSize:11,color:"var(--text3)"}}>
+                      💡 Próximamente: subir documentos directamente a cada carpeta
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
