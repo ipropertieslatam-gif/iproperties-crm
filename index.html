@@ -262,6 +262,18 @@ const supa = {
       return `${SUPA_URL}/storage/v1/object/public/propiedades/${fileName}`;
     }
     return null;
+  },
+  uploadDocumento: async (file, expedienteId) => {
+    const fileName = `${expedienteId}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const res = await fetch(`${SUPA_URL}/storage/v1/object/documentos/${fileName}`, {
+      method: "POST",
+      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": file.type },
+      body: file
+    });
+    if (res.ok) {
+      return { url: `${SUPA_URL}/storage/v1/object/public/documentos/${fileName}`, nombre: file.name, fileName };
+    }
+    return null;
   }
 };
 
@@ -2579,19 +2591,40 @@ Roberth debe revisar el CRM para ver los detalles.`);
     setMessages(prev => [...prev, { role:"user", text: msg }]);
     setLoadingAI(true);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      // Usar Supabase Edge Function como proxy para Anthropic
+      const res = await fetch(`${SUPA_URL}/functions/v1/legal-ai`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: "Eres un asistente legal especializado en bienes raíces en Colombia. Ayudas con contratos de compraventa, arrendamiento, saneamiento de títulos, trámites notariales, hipotecas y registro de inmuebles. Respuestas claras, concisas y en español. Máximo 4 párrafos.",
-          messages: [{ role:"user", content: msg }]
-        })
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPA_KEY}`,
+        },
+        body: JSON.stringify({ message: msg })
       });
-      const data = await res.json();
-      const reply = data.content?.map(b => b.text || "").join("") || "No pude obtener respuesta.";
-      setMessages(prev => [...prev, { role:"assistant", text: reply }]);
+
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.reply || "No pude obtener respuesta.";
+        setMessages(prev => [...prev, { role:"assistant", text: reply }]);
+      } else {
+        // Fallback: respuesta predefinida inteligente basada en palabras clave
+        const respuestas = {
+          "compraventa": "Para una compraventa en Colombia necesitas: \n\n1. **Documentos del vendedor:** Cédula, certificado de libertad y tradición, paz y salvo predial, paz y salvo de administración y servicios públicos.\n\n2. **Documentos del comprador:** Cédula, constancia de ingresos, extractos bancarios (3 meses).\n\n3. **Del inmueble:** Escritura pública, planos aprobados, reglamento de propiedad horizontal.\n\n4. **Proceso:** Promesa → Escritura pública → Registro en Instrumentos Públicos.",
+          "hipoteca": "Para cancelar una hipoteca en Colombia:\n\n1. Paga el saldo total de la deuda al banco.\n2. El banco emite una carta de paz y salvo hipotecario.\n3. Con esa carta ve al notario para escriturar la cancelación.\n4. Registra la cancelación en la Oficina de Instrumentos Públicos.\n5. El proceso tarda entre 15 y 30 días hábiles.",
+          "gravamen": "El Certificado de Libertad y Tradición es el documento que muestra el historial completo de un inmueble: quién ha sido propietario, si tiene hipotecas, embargos, demandas o cualquier limitación. \n\nSe obtiene en la Oficina de Instrumentos Públicos o en línea en supernotariado.gov.co. Cuesta aproximadamente $20,000 COP y es válido por 30 días.",
+          "escriturar": "El proceso de escrituración en Colombia tarda entre 8 y 20 días hábiles:\n\n- Firma de promesa: 1 día\n- Recopilación de documentos: 5-10 días\n- Cita en notaría: 1-2 días\n- Firma de escritura: 1 día\n- Registro en Instrumentos Públicos: 3-8 días\n\nEl costo notarial es aproximadamente el 0.27% del valor del inmueble para cada parte.",
+          "saneamiento": "El saneamiento de un inmueble consiste en regularizar su situación jurídica. Incluye:\n\n1. **Regularización de título:** Corregir errores en escrituras, superficie o linderos.\n2. **Cancelación de gravámenes:** Levantar hipotecas o embargos.\n3. **Sucesiones:** Formalizar herencias sin escriturar.\n4. **Prescripción adquisitiva:** Para inmuebles sin título formal.\n\nTiempo estimado: 2-6 meses dependiendo del caso.",
+          "arrendamiento": "Para un contrato de arrendamiento en Colombia necesitas:\n\n1. Contrato escrito con duración, valor, incremento anual (IPC) y cláusulas de entrega.\n2. Cédulas de arrendador y arrendatario.\n3. Inventario firmado del inmueble.\n4. Depósito en garantía (1-2 meses de arriendo).\n5. Si hay fiador: cédula y certificado de libertad del inmueble del fiador.\n\nEl incremento anual máximo es el IPC del año anterior.",
+        };
+        
+        const msgLower = msg.toLowerCase();
+        let reply = "Entiendo tu consulta. Para darte una respuesta precisa sobre temas legales inmobiliarios en Colombia, te recomiendo consultar directamente con Roberth Beltrán quien puede revisar tu caso específico. \n\nPuedo ayudarte con preguntas sobre: compraventa, hipotecas, gravámenes, escrituración, saneamiento o arrendamiento.";
+        
+        for (const [key, resp] of Object.entries(respuestas)) {
+          if (msgLower.includes(key)) { reply = resp; break; }
+        }
+        
+        setMessages(prev => [...prev, { role:"assistant", text: reply }]);
+      }
     } catch(e) {
       setMessages(prev => [...prev, { role:"assistant", text:"Error al conectar. Intenta de nuevo." }]);
     }
@@ -2797,7 +2830,7 @@ Roberth debe revisar el CRM para ver los detalles.`);
                     </div>
                   ))}
                 </div>
-                <div style={{padding:"12px 20px",display:"flex",gap:8}}>
+                <div style={{padding:"12px 20px",display:"flex",gap:8"}}>
                   <button className="btn btn-ghost" style={{flex:1,justifyContent:"center",fontSize:12}}
                     onClick={()=>enviarAlerta(selectedExp)}>
                     🔔 Enviar alerta a Roberth
@@ -2811,6 +2844,7 @@ Roberth debe revisar el CRM para ver los detalles.`);
                     {["Promesa","Escritura","Registro"].map(t=><option key={t}>{t}</option>)}
                   </select>
                 </div>
+                <DocumentosExpediente expedienteId={selectedExp.id} nombreExp={selectedExp.tipo} />
               </div>
             )}
           </div>
@@ -3778,6 +3812,95 @@ function Reportes() {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ── DOCUMENTOS EXPEDIENTE ────────────────────────────────
+function DocumentosExpediente({ expedienteId, nombreExp }) {
+  const [docs, setDocs] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [loadingDocs, setLoadingDocs] = useState(true);
+
+  const loadDocs = useCallback(async () => {
+    setLoadingDocs(true);
+    const data = await supa.from("documentos_legales").select("*");
+    const arr = Array.isArray(data) ? data.filter(d=>d.expediente_id===expedienteId) : [];
+    setDocs(arr);
+    setLoadingDocs(false);
+  }, [expedienteId]);
+
+  useEffect(() => { loadDocs(); }, [loadDocs]);
+
+  const handleUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    setUploading(true);
+    for (const file of files) {
+      const result = await supa.uploadDocumento(file, expedienteId);
+      if (result) {
+        await supa.from("documentos_legales").insert({
+          expediente_id: expedienteId,
+          nombre: file.name,
+          url: result.url,
+          tipo: file.type,
+          subido_por: getUsuario(),
+        });
+      }
+    }
+    setUploading(false);
+    loadDocs();
+  };
+
+  const handleDelete = async (doc) => {
+    if (window.confirm(`¿Eliminar ${doc.nombre}?`)) {
+      await supa.from("documentos_legales").delete({ id: doc.id });
+      loadDocs();
+    }
+  };
+
+  const getFileIcon = (tipo) => {
+    if (tipo?.includes("pdf")) return "📄";
+    if (tipo?.includes("image")) return "🖼️";
+    if (tipo?.includes("word") || tipo?.includes("document")) return "📝";
+    if (tipo?.includes("sheet") || tipo?.includes("excel")) return "📊";
+    return "📎";
+  };
+
+  return (
+    <div style={{padding:"0 20px 16px"}}>
+      <div style={{borderTop:"1px solid var(--border)",paddingTop:14,marginTop:4}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:600,color:"var(--text)"}}>📁 Documentos del expediente</div>
+          <label className="gallery-upload-btn" style={{fontSize:11}}>
+            {uploading ? "⏳ Subiendo..." : "📎 Subir documentos"}
+            <input type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx" style={{display:"none"}}
+              onChange={handleUpload} disabled={uploading} />
+          </label>
+        </div>
+        {loadingDocs ? (
+          <div style={{fontSize:11,color:"var(--text3)",textAlign:"center",padding:"10px 0"}}>Cargando...</div>
+        ) : docs.length === 0 ? (
+          <div style={{fontSize:11,color:"var(--text3)",textAlign:"center",padding:"10px 0",background:"var(--ink3)",borderRadius:6}}>
+            Sin documentos aún — sube PDF, Word, imágenes o Excel
+          </div>
+        ) : (
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {docs.map((doc,i) => (
+              <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:"var(--ink3)",borderRadius:6,padding:"8px 12px",border:"1px solid var(--border)"}}>
+                <span style={{fontSize:18}}>{getFileIcon(doc.tipo)}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,color:"var(--text)",fontWeight:500}}>{doc.nombre}</div>
+                  <div style={{fontSize:10,color:"var(--text3)"}}>Subido por {doc.subido_por} · {doc.created_at ? new Date(doc.created_at).toLocaleDateString("es-CO") : ""}</div>
+                </div>
+                <a href={doc.url} target="_blank" style={{fontSize:11,color:"var(--blue)",textDecoration:"none",padding:"3px 8px",border:"1px solid var(--blue-dim)",borderRadius:4}}>👁 Ver</a>
+                <button onClick={()=>handleDelete(doc)} style={{fontSize:11,color:"var(--red)",background:"var(--red-dim)",border:"1px solid var(--red-dim)",borderRadius:4,padding:"3px 6px",cursor:"pointer"}}>🗑</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
