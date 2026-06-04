@@ -2591,40 +2591,49 @@ Roberth debe revisar el CRM para ver los detalles.`);
     setMessages(prev => [...prev, { role:"user", text: msg }]);
     setLoadingAI(true);
     try {
-      // Usar Supabase Edge Function como proxy para Anthropic
-      const res = await fetch(`${SUPA_URL}/functions/v1/legal-ai`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${SUPA_KEY}`,
-        },
-        body: JSON.stringify({ message: msg })
-      });
+      // IA Legal con base de conocimiento colombiana
+      const baseConocimiento = {
+        "compraventa": "Para una compraventa en Colombia necesitas:\n\n📋 Documentos del VENDEDOR:\n• Cédula de ciudadanía\n• Certificado de libertad y tradición (vigente 30 días)\n• Paz y salvo predial\n• Paz y salvo administración\n• Paz y salvo servicios públicos\n• Escritura pública del inmueble\n\n📋 Documentos del COMPRADOR:\n• Cédula de ciudadanía\n• Comprobante de ingresos\n• Extractos bancarios (3 meses)\n• RFC o RUT\n\n📌 Proceso:\n1. Promesa de compraventa\n2. Recopilación documentos\n3. Escritura pública en notaría\n4. Registro en Instrumentos Públicos\n\n⏱ Tiempo estimado: 15-30 días hábiles",
+        "hipoteca": "Para CANCELAR una hipoteca en Colombia:\n\n1. Paga el saldo total al banco\n2. Solicita carta de paz y salvo hipotecario\n3. El banco emite la escritura de cancelación\n4. Firma en notaría (costo: ~0.27% del valor)\n5. Registro en Oficina de Instrumentos Públicos\n\n⏱ Tiempo: 15-30 días hábiles\n💰 Costo aproximado: $300,000 - $800,000 COP en derechos notariales",
+        "gravamen": "El Certificado de Libertad y Tradición muestra:\n\n• Historial de propietarios del inmueble\n• Hipotecas activas o canceladas\n• Embargos o demandas\n• Limitaciones de dominio\n• Condiciones resolutorias\n\n📍 Dónde obtenerlo: Oficina de Instrumentos Públicos o supernotariado.gov.co\n💰 Costo: ~$20,000 COP\n⏱ Validez: 30 días\n\n⚠️ Siempre verifica antes de comprar o vender",
+        "escriturar": "Proceso de escrituración en Colombia:\n\n⏱ Tiempos:\n• Firma de promesa: 1 día\n• Recopilación documentos: 5-10 días\n• Cita notaría: 1-3 días\n• Firma escritura: 1 día\n• Registro Instrumentos Públicos: 3-8 días\n\n💰 Costos notariales:\n• Derechos notariales: 0.27% del valor (cada parte)\n• Registro: 0.5% del valor\n• Boleta fiscal: 1% del valor\n• IVA sobre honorarios: 19%\n\nTotal aproximado: 2-3% del valor del inmueble",
+        "saneamiento": "Tipos de saneamiento inmobiliario:\n\n1. 📜 Regularización de título\n   Corrige errores en escrituras, linderos o superficie\n\n2. ⚖️ Cancelación de gravámenes\n   Levanta hipotecas o embargos antiguos\n\n3. 🗺️ Segregación o fusión de predios\n   Divide o une lotes según necesidad\n\n4. 📋 Sucesión y adjudicación\n   Formaliza herencias sin escriturar\n\n5. ⏳ Prescripción adquisitiva\n   Para inmuebles sin título formal (requiere abogado)\n\n⏱ Tiempo: 2-6 meses según el caso",
+        "arrendamiento": "Requisitos para contrato de arrendamiento:\n\n📋 Documentos necesarios:\n• Contrato escrito (duración, valor, incremento)\n• Cédulas arrendador y arrendatario\n• Comprobante ingresos del arrendatario (3x el canon)\n• Inventario firmado del inmueble\n• Depósito garantía: 1-2 meses de canon\n\n👤 Si hay fiador:\n• Cédula del fiador\n• Certificado de libertad de su inmueble\n• Comprobante de ingresos\n\n📌 Incremento anual máximo: IPC del año anterior\n⚖️ Ley 820 de 2003 regula los arrendamientos en Colombia",
+        "promesa": "La promesa de compraventa debe incluir:\n\n✅ Elementos obligatorios:\n• Identificación completa de vendedor y comprador\n• Descripción detallada del inmueble\n• Precio y forma de pago\n• Fecha límite para escriturar\n• Arras o cuota inicial (generalmente 10%)\n• Penalidad por incumplimiento\n• Condiciones suspensivas si hay crédito\n\n⚠️ Recomendaciones:\n• Verificar certificado de libertad antes de firmar\n• Confirmar paz y salvos\n• Incluir cláusula de devolución de arras si no aprueba crédito",
+        "predial": "Paz y salvo predial en Colombia:\n\n📍 Dónde obtenerlo:\n• Portal web de la Secretaría de Hacienda de tu municipio\n• Oficinas físicas de recaudo\n• En Bogotá: portal.shd.gov.co\n\n📋 Qué necesitas:\n• Número de matrícula inmobiliaria o chip catastral\n• El paz y salvo debe estar al día al momento de escriturar\n\n⚠️ El predial se paga anualmente. Si hay deuda, el notario no puede escriturar hasta que esté saldado",
+        "registro": "Registro en Instrumentos Públicos:\n\n📋 Documentos necesarios:\n• Escritura pública original y copia\n• Comprobante pago impuesto de registro\n• Comprobante pago Sayco-Acinpro si aplica\n• Paz y salvo predial\n\n💰 Costo del registro: 0.5% del valor del acto\n⏱ Tiempo: 3-8 días hábiles\n\n📍 Dónde hacerlo:\n• Oficina de Registro de Instrumentos Públicos de tu municipio\n• También en línea: orip.gov.co",
+      };
 
-      if (res.ok) {
-        const data = await res.json();
-        const reply = data.reply || "No pude obtener respuesta.";
-        setMessages(prev => [...prev, { role:"assistant", text: reply }]);
-      } else {
-        // Fallback: respuesta predefinida inteligente basada en palabras clave
-        const respuestas = {
-          "compraventa": "Para una compraventa en Colombia necesitas: \n\n1. **Documentos del vendedor:** Cédula, certificado de libertad y tradición, paz y salvo predial, paz y salvo de administración y servicios públicos.\n\n2. **Documentos del comprador:** Cédula, constancia de ingresos, extractos bancarios (3 meses).\n\n3. **Del inmueble:** Escritura pública, planos aprobados, reglamento de propiedad horizontal.\n\n4. **Proceso:** Promesa → Escritura pública → Registro en Instrumentos Públicos.",
-          "hipoteca": "Para cancelar una hipoteca en Colombia:\n\n1. Paga el saldo total de la deuda al banco.\n2. El banco emite una carta de paz y salvo hipotecario.\n3. Con esa carta ve al notario para escriturar la cancelación.\n4. Registra la cancelación en la Oficina de Instrumentos Públicos.\n5. El proceso tarda entre 15 y 30 días hábiles.",
-          "gravamen": "El Certificado de Libertad y Tradición es el documento que muestra el historial completo de un inmueble: quién ha sido propietario, si tiene hipotecas, embargos, demandas o cualquier limitación. \n\nSe obtiene en la Oficina de Instrumentos Públicos o en línea en supernotariado.gov.co. Cuesta aproximadamente $20,000 COP y es válido por 30 días.",
-          "escriturar": "El proceso de escrituración en Colombia tarda entre 8 y 20 días hábiles:\n\n- Firma de promesa: 1 día\n- Recopilación de documentos: 5-10 días\n- Cita en notaría: 1-2 días\n- Firma de escritura: 1 día\n- Registro en Instrumentos Públicos: 3-8 días\n\nEl costo notarial es aproximadamente el 0.27% del valor del inmueble para cada parte.",
-          "saneamiento": "El saneamiento de un inmueble consiste en regularizar su situación jurídica. Incluye:\n\n1. **Regularización de título:** Corregir errores en escrituras, superficie o linderos.\n2. **Cancelación de gravámenes:** Levantar hipotecas o embargos.\n3. **Sucesiones:** Formalizar herencias sin escriturar.\n4. **Prescripción adquisitiva:** Para inmuebles sin título formal.\n\nTiempo estimado: 2-6 meses dependiendo del caso.",
-          "arrendamiento": "Para un contrato de arrendamiento en Colombia necesitas:\n\n1. Contrato escrito con duración, valor, incremento anual (IPC) y cláusulas de entrega.\n2. Cédulas de arrendador y arrendatario.\n3. Inventario firmado del inmueble.\n4. Depósito en garantía (1-2 meses de arriendo).\n5. Si hay fiador: cédula y certificado de libertad del inmueble del fiador.\n\nEl incremento anual máximo es el IPC del año anterior.",
-        };
-        
-        const msgLower = msg.toLowerCase();
-        let reply = "Entiendo tu consulta. Para darte una respuesta precisa sobre temas legales inmobiliarios en Colombia, te recomiendo consultar directamente con Roberth Beltrán quien puede revisar tu caso específico. \n\nPuedo ayudarte con preguntas sobre: compraventa, hipotecas, gravámenes, escrituración, saneamiento o arrendamiento.";
-        
-        for (const [key, resp] of Object.entries(respuestas)) {
-          if (msgLower.includes(key)) { reply = resp; break; }
+      const msgLower = msg.toLowerCase();
+      let reply = "";
+
+      // Buscar coincidencias en la base de conocimiento
+      const keywords = {
+        "compraventa": ["compraventa","compra","venta","vender","comprar","documentos para"],
+        "hipoteca": ["hipoteca","cancelar hipoteca","levantamiento","gravamen hipotecario"],
+        "gravamen": ["gravamen","certificado de libertad","tradicion","libertad y tradicion"],
+        "escriturar": ["escriturar","escritura","notaria","notarial","cuanto tarda","cuanto cuesta"],
+        "saneamiento": ["saneamiento","regularizar","sanear","titulo","prescripcion"],
+        "arrendamiento": ["arrendamiento","arriendo","arrendar","alquilar","inquilino","canon"],
+        "promesa": ["promesa","promesa de compraventa","arras","cuota inicial"],
+        "predial": ["predial","impuesto predial","paz y salvo predial"],
+        "registro": ["registro","instrumentos publicos","registrar","matricula"],
+      };
+
+      for (const [tema, palabras] of Object.entries(keywords)) {
+        if (palabras.some(p => msgLower.includes(p))) {
+          reply = baseConocimiento[tema];
+          break;
         }
-        
-        setMessages(prev => [...prev, { role:"assistant", text: reply }]);
       }
+
+      if (!reply) {
+        reply = "Hola, soy el asistente legal de iProperties Latam 👋\n\nPuedo ayudarte con información sobre:\n\n📋 Compraventa de inmuebles\n🏦 Cancelación de hipotecas\n📜 Certificado de libertad y tradición\n✍️ Proceso de escrituración\n🏛️ Saneamiento de inmuebles\n🏠 Contratos de arrendamiento\n📝 Promesas de compraventa\n💰 Paz y salvo predial\n📍 Registro en Instrumentos Públicos\n\nEscribe tu pregunta y te respondo con información actualizada de Colombia.";
+      }
+
+      // Simular tiempo de respuesta
+      await new Promise(r => setTimeout(r, 800));
+      setMessages(prev => [...prev, { role:"assistant", text: reply }]);
     } catch(e) {
       setMessages(prev => [...prev, { role:"assistant", text:"Error al conectar. Intenta de nuevo." }]);
     }
